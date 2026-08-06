@@ -19,6 +19,9 @@
   const mediaGateBar = document.getElementById('mediaGateBar');
   const mediaGateCount = document.getElementById('mediaGateCount');
   const mediaGateSize = document.getElementById('mediaGateSize');
+  const pageScrollCue = document.getElementById('pageScrollCue');
+  const pageScrollCueText = pageScrollCue ? pageScrollCue.querySelector('.page-scroll-cue-text') : null;
+  const pageScrollCueArrow = pageScrollCue ? pageScrollCue.querySelector('.page-scroll-cue-arrow') : null;
 
   // Map route keys to content partial files
   const views = {
@@ -47,6 +50,7 @@
   let viewCleanup = null;
   let mediaLoading = false;
   const loadedMediaSets = new Set();
+  let globalConfigPromise = null;
   const mediaGateLines = [
     'Chasing loose pixels through the vents...',
     'Convincing screenshots to stand still...',
@@ -114,6 +118,32 @@
 
   function uniqueUrls(urls) {
     return [...new Set((urls || []).filter(Boolean))];
+  }
+
+  function encodeAssetPath(pathValue) {
+    return normalizeText(pathValue)
+      .split('/')
+      .map((part) => encodeURIComponent(decodeURIComponent(part)))
+      .join('/');
+  }
+
+  async function loadGlobalConfig() {
+    if (!globalConfigPromise) {
+      globalConfigPromise = fetch('CONFIG/global_config.json', { cache: 'no-store' })
+        .then((res) => {
+          if (!res.ok) throw new Error('Unable to load global config');
+          return res.json();
+        })
+        .catch((err) => {
+          console.warn('Global config skipped:', err);
+          return {};
+        });
+    }
+    return globalConfigPromise;
+  }
+
+  function getProjectMeta(config) {
+    return (config && config.projectMeta) || {};
   }
 
   function setMediaGate(open) {
@@ -314,9 +344,42 @@
     els.forEach((el) => revealObserver.observe(el));
   }
 
+  function updatePageScrollCue() {
+    if (!pageScrollCue) return;
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    const hasMore = maxScroll > 180;
+    const nearBottom = window.scrollY >= maxScroll - 120;
+    pageScrollCue.classList.toggle('visible', hasMore);
+    pageScrollCue.classList.toggle('up', hasMore && nearBottom);
+    pageScrollCue.setAttribute('aria-hidden', hasMore ? 'false' : 'true');
+    pageScrollCue.setAttribute('aria-label', nearBottom ? 'Scroll back to top' : 'Scroll for more content');
+    if (pageScrollCueText) pageScrollCueText.textContent = nearBottom ? 'Top' : 'More';
+    if (pageScrollCueArrow) pageScrollCueArrow.textContent = nearBottom ? '↑' : '↓';
+  }
+
+  function schedulePageScrollCueUpdate() {
+    window.requestAnimationFrame(updatePageScrollCue);
+    window.setTimeout(updatePageScrollCue, 350);
+    window.setTimeout(updatePageScrollCue, 1200);
+  }
+
+  if (pageScrollCue) {
+    pageScrollCue.addEventListener('click', () => {
+      const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      const nearBottom = window.scrollY >= maxScroll - 120;
+      window.scrollTo({
+        top: nearBottom ? 0 : Math.min(window.scrollY + Math.floor(window.innerHeight * 0.78), maxScroll),
+        behavior: 'smooth'
+      });
+    });
+    window.addEventListener('scroll', updatePageScrollCue, { passive: true });
+    window.addEventListener('resize', schedulePageScrollCueUpdate);
+  }
+
   // ---- Portfolio rendering logic ----
   const PALETTE = ['#7f5af0', '#2cb67d', '#e58e27', '#4cc9f0', '#f72585', '#3a86ff', '#06d6a0', '#ff5e7d'];
   let allCategories = [];
+  let projectMeta = {};
 
   function initPortfolio(scope) {
     const filtersEl = document.getElementById('filters');
@@ -335,6 +398,19 @@
 
     let currentPhotos = [];
     let currentIndex = 0;
+
+    async function loadProjectMeta() {
+      const config = await loadGlobalConfig();
+      return getProjectMeta(config);
+    }
+
+    function visibilityPill(value) {
+      const visibility = normalizeText(value);
+      if (!visibility) return '';
+      const key = visibility.toLowerCase();
+      const className = key === 'public' ? 'is-public' : key === 'private' ? 'is-private' : '';
+      return `<span class="visibility-pill ${className}">${escapeHtml(visibility)}</span>`;
+    }
 
     function showPhoto(index) {
       currentIndex = (index + currentPhotos.length) % currentPhotos.length;
@@ -412,6 +488,12 @@
       const coverAlt = projectName;
       const safeProjectName = escapeHtml(projectName);
       const safeCategoryLabel = escapeHtml(category.label);
+      const meta = (projectMeta[category.name] && projectMeta[category.name][project.name]) || {};
+      const visibilityMarkup = visibilityPill(meta.visibility);
+      const vrcUrl = normalizeText(meta.vrcUrl || meta.vrcLink);
+      const vrcLinkMarkup = vrcUrl
+        ? `<a class="btn btn-primary project-vrc-link" href="${escapeHtml(vrcUrl)}" target="_blank" rel="noopener noreferrer">VRC Link</a>`
+        : '';
 
       // Build carousel slides from all photos
       let slides = '';
@@ -431,11 +513,17 @@
         <div class="project-thumb" style="--tint:${tint}">
           ${slides}
           <div class="project-overlay">
-            <button class="btn btn-primary gallery-open">View Photos${project.photos.length > 1 ? ` (${project.photos.length})` : ''}</button>
+            <div class="project-overlay-actions">
+              <button class="btn btn-primary gallery-open">View Photos${project.photos.length > 1 ? ` (${project.photos.length})` : ''}</button>
+              ${vrcLinkMarkup}
+            </div>
           </div>
         </div>
         <div class="project-info">
-          <span class="tag">${safeCategoryLabel}</span>
+          <div class="project-tags">
+            <span class="tag">${safeCategoryLabel}</span>
+            ${visibilityMarkup}
+          </div>
           <h3>${safeProjectName}</h3>
           <p>${project.photos.length} photo${project.photos.length > 1 ? 's' : ''}</p>
         </div>
@@ -505,7 +593,11 @@
     }
 
     if (window.PROJECTS && Array.isArray(window.PROJECTS)) {
-      render(window.PROJECTS);
+      loadProjectMeta().then((meta) => {
+        projectMeta = meta || {};
+        render(window.PROJECTS);
+        schedulePageScrollCueUpdate();
+      });
       preloadMediaGroups(window.PROJECTS.map((category) => ({
         label: category.label,
         urls: (category.projects || []).flatMap((project) => project.photos || [])
@@ -523,6 +615,7 @@
 // ---- VRChat photo gallery rendering logic ----
   function initVrchat(scope) {
     const filtersEl = document.getElementById('vrchatFilters');
+    const jumpbarEl = document.getElementById('vrchatJumpbar');
     const gridEl = document.getElementById('vrchatGrid');
     const emptyEl = document.getElementById('vrchatEmpty');
     const modal = document.getElementById('vrchatModal');
@@ -588,6 +681,10 @@
       const month = Number(match[2]);
       const monthName = MONTH_NAMES[month - 1] || match[2];
       return `${monthName} ${year}`;
+    }
+
+    function monthId(categoryName, monthLabel) {
+      return `vrchat-${categoryName}-${monthLabel}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     }
 
     function groupPhotosByMonth(photos) {
@@ -656,6 +753,54 @@
       return monthGrid;
     }
 
+    function renderJumpbar(selectedCategories) {
+      if (!jumpbarEl) return;
+      jumpbarEl.innerHTML = '';
+      const chips = [];
+
+      selectedCategories.forEach((category) => {
+        const groups = groupPhotosByMonth(category.photos);
+        groups.forEach((photos, monthLabel) => {
+          chips.push({
+            category,
+            monthLabel,
+            count: photos.length,
+            target: monthId(category.name, monthLabel)
+          });
+        });
+      });
+
+      if (chips.length <= 1) {
+        jumpbarEl.style.display = 'none';
+        return;
+      }
+
+      jumpbarEl.style.display = '';
+      const years = [...new Set(chips.map((chip) => chip.monthLabel.split(' ').pop()))];
+      jumpbarEl.innerHTML = `
+        <div class="vrchat-jumpbar-head">
+          <span>Jump Bar</span>
+          <small>${years.join(' / ')}</small>
+        </div>
+        <div class="vrchat-jumpbar-track">
+          ${chips.map((chip) => `
+            <button type="button" class="vrchat-jump-chip" data-target="${escapeHtml(chip.target)}">
+              <span>${escapeHtml(chip.monthLabel)}</span>
+              <small>${chip.count}</small>
+            </button>
+          `).join('')}
+        </div>
+      `;
+
+      jumpbarEl.querySelectorAll('.vrchat-jump-chip').forEach((button) => {
+        button.addEventListener('click', () => {
+          const target = document.getElementById(button.dataset.target);
+          if (!target) return;
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
+    }
+
     function renderGrid() {
       gridEl.innerHTML = '';
       const selected = activeCategory === 'all'
@@ -665,8 +810,9 @@
       const buildCardsForCategory = (category, includeSection) => {
         const section = document.createElement('section');
         section.className = 'vrchat-section';
+        const isUnsorted = category.name === 'unsorted' || category.label.toLowerCase() === 'unsorted';
 
-        if (includeSection) {
+        if (includeSection && !isUnsorted) {
           const header = document.createElement('div');
           header.className = 'portfolio-section-head';
           header.innerHTML = `
@@ -680,6 +826,7 @@
         groups.forEach((photos, monthLabel) => {
           const monthBlock = document.createElement('div');
           monthBlock.className = 'vrchat-month-group';
+          monthBlock.id = monthId(category.name, monthLabel);
 
           const monthHeader = document.createElement('div');
           monthHeader.className = 'vrchat-month-head';
@@ -704,6 +851,7 @@
         gridEl.appendChild(buildCardsForCategory(selected[0], false));
       }
 
+      renderJumpbar(selected);
       observeReveals();
     }
 
@@ -750,6 +898,7 @@
 
     renderFilters();
     renderGrid();
+    schedulePageScrollCueUpdate();
     preloadMediaGroups(categories.map((category) => ({
       label: category.label,
       urls: category.photos
@@ -811,6 +960,7 @@
         });
 
         observeReveals();
+        schedulePageScrollCueUpdate();
         preloadMediaGroups(items.map((item) => ({
           label: normalizeText(item.category, 'Commission'),
           urls: item.images || []
@@ -910,6 +1060,173 @@
     render();
   }
 
+  function initWelcome() {
+    const toolsEl = document.getElementById('welcomeTools');
+    const panelEl = document.getElementById('welcomePanel');
+    const signalsEl = document.getElementById('welcomeSignals');
+    const makesHeadEl = document.getElementById('welcomeMakesHead');
+    const makesEl = document.getElementById('welcomeMakes');
+    const flowEl = document.getElementById('welcomeFlow');
+
+    if (!toolsEl && !panelEl && !signalsEl && !makesEl && !flowEl) return;
+
+    async function render() {
+      try {
+        const globalConfig = await loadGlobalConfig();
+        const config = globalConfig.welcome || {};
+
+        if (toolsEl) {
+          const tools = Array.isArray(config.tools) ? config.tools : [];
+          toolsEl.innerHTML = tools.map((tool) => `<span>${escapeHtml(tool)}</span>`).join('');
+        }
+
+        if (panelEl) {
+          const intro = config.intro || {};
+          panelEl.innerHTML = `
+            <span class="welcome-panel-kicker">${escapeHtml(normalizeText(intro.kicker, 'Self-taught creator'))}</span>
+            <h2>${escapeHtml(normalizeText(intro.title, 'Building in Unity.'))}</h2>
+            <p>${escapeHtml(normalizeText(intro.description, 'Making worlds, tools, and experiments.'))}</p>
+          `;
+        }
+
+        if (signalsEl) {
+          const signals = Array.isArray(config.signals) ? config.signals : [];
+          signalsEl.innerHTML = signals.map((signal) => `
+            <div>
+              <strong>${escapeHtml(normalizeText(signal.title))}</strong>
+              <span>${escapeHtml(normalizeText(signal.description))}</span>
+            </div>
+          `).join('');
+        }
+
+        if (makesHeadEl) {
+          const makes = config.makes || {};
+          makesHeadEl.innerHTML = `
+            <p class="eyebrow">${escapeHtml(normalizeText(makes.eyebrow, 'What I Make'))}</p>
+            <h2>${escapeHtml(normalizeText(makes.title, 'Worlds, tools, interfaces, and experiments.'))}</h2>
+            <p>${escapeHtml(normalizeText(makes.description, 'Things that feel useful, atmospheric, and personal.'))}</p>
+          `;
+        }
+
+        if (makesEl) {
+          const items = Array.isArray(config.makes && config.makes.items) ? config.makes.items : [];
+          makesEl.innerHTML = items.map((item, index) => `
+            <article class="welcome-make-card reveal">
+              <span>${String(index + 1).padStart(2, '0')}</span>
+              <h3>${escapeHtml(normalizeText(item.title))}</h3>
+              <p>${escapeHtml(normalizeText(item.description))}</p>
+            </article>
+          `).join('');
+        }
+
+        if (flowEl) {
+          const flow = Array.isArray(config.flow) ? config.flow : [];
+          flowEl.innerHTML = flow.map((step) => `
+            <div>
+              <span>${escapeHtml(normalizeText(step.title))}</span>
+              <p>${escapeHtml(normalizeText(step.description))}</p>
+            </div>
+          `).join('');
+        }
+
+        observeReveals();
+        schedulePageScrollCueUpdate();
+      } catch (err) {
+        console.warn('Welcome config skipped:', err);
+      }
+    }
+
+    render();
+  }
+
+  function initFeatured(scope) {
+    const host = document.getElementById('featuredShowcase');
+    if (!host) return;
+
+    async function render() {
+      try {
+        const globalConfig = await loadGlobalConfig();
+        const item = globalConfig.featured || {};
+        const title = normalizeText(item.title);
+        const image = encodeAssetPath(item.image);
+
+        if (!title || !image) {
+          host.style.display = 'none';
+          return;
+        }
+
+        const eyebrow = normalizeText(item.eyebrow, 'Featured Pick');
+        const heading = normalizeText(item.heading, 'Spotlight From The Archive');
+        const label = normalizeText(item.label, 'Featured');
+        const visibility = normalizeText(item.visibility);
+        const description = normalizeText(item.description, 'A hand-picked stop from the archive.');
+        const imageAlt = normalizeText(item.imageAlt, title);
+        const href = normalizeText(item.href, '#/portfolio');
+        const page = normalizeText(item.page, 'portfolio');
+        const cta = normalizeText(item.cta, 'View Feature');
+        const projectMatch = (window.PROJECTS || [])
+          .flatMap((category) => (category.projects || []).map((project) => ({ category, project })))
+          .find((entry) => normalizeText(entry.project.name).replace(/_/g, ' ') === title);
+        const projectPhotos = projectMatch ? projectMatch.project : null;
+        let featuredMeta = {};
+        if (projectMatch) {
+          const meta = getProjectMeta(globalConfig);
+          featuredMeta = (meta[projectMatch.category.name] && meta[projectMatch.category.name][projectMatch.project.name]) || {};
+        }
+        const vrcUrl = normalizeText(featuredMeta.vrcUrl || featuredMeta.vrcLink);
+        const vrcLinkMarkup = vrcUrl
+          ? `<a href="${escapeHtml(vrcUrl)}" class="featured-link featured-vrc-link" target="_blank" rel="noopener noreferrer">VRC Link</a>`
+          : '';
+        const photos = uniqueUrls(projectPhotos && Array.isArray(projectPhotos.photos) ? projectPhotos.photos : [image]);
+        const slides = photos.map((src, index) => `
+          <img class="featured-img${index === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(imageAlt)}" loading="eager" />
+        `).join('');
+
+        host.innerHTML = `
+          <div class="featured-head">
+            <span>${escapeHtml(eyebrow)}</span>
+            <p>${escapeHtml(heading)}</p>
+          </div>
+          <article class="featured-card">
+            <a href="${escapeHtml(href)}" data-page="${escapeHtml(page)}" class="featured-media" aria-label="${escapeHtml(cta)}">
+              ${slides}
+            </a>
+            <div class="featured-body">
+              <div class="featured-tags">
+                <span class="featured-label">${escapeHtml(label)}</span>
+                ${visibility ? `<span class="visibility-pill ${visibility.toLowerCase() === 'public' ? 'is-public' : visibility.toLowerCase() === 'private' ? 'is-private' : ''}">${escapeHtml(visibility)}</span>` : ''}
+              </div>
+              <h2>${escapeHtml(title)}</h2>
+              <p>${escapeHtml(description)}</p>
+              <div class="featured-actions">
+                <a href="${escapeHtml(href)}" class="featured-link" data-page="${escapeHtml(page)}">${escapeHtml(cta)}</a>
+                ${vrcLinkMarkup}
+              </div>
+            </div>
+          </article>
+        `;
+        host.style.display = '';
+        wireNav();
+        observeReveals();
+        schedulePageScrollCueUpdate();
+        const slideEls = host.querySelectorAll('.featured-img');
+        if (slideEls.length > 1 && scope) {
+          let currentSlide = 0;
+          scope.addInterval(() => {
+            slideEls[currentSlide].classList.remove('active');
+            currentSlide = (currentSlide + 1) % slideEls.length;
+            slideEls[currentSlide].classList.add('active');
+          }, 5000);
+        }
+      } catch (err) {
+        console.warn('Featured pick skipped:', err);
+        host.style.display = 'none';
+      }
+    }
+
+    render();
+  }
+
   // ---- View loading ----
   function setActive(name) {
     document.querySelectorAll('.nav-links a').forEach((a) => {
@@ -934,7 +1251,9 @@ async function loadView(name) {
       app.innerHTML = document.getElementById('homeContent').innerHTML;
       setActive('home');
       wireNav();
+      initFeatured(scope);
       observeReveals();
+      schedulePageScrollCueUpdate();
       return;
     }
 
@@ -948,11 +1267,13 @@ async function loadView(name) {
       app.innerHTML = container.innerHTML;
 setActive(name);
       wireNav();
+      if (name === 'welcome') initWelcome();
       if (name === 'portfolio') initPortfolio(scope);
       if (name === 'vrchat') initVrchat(scope);
       if (name === 'downloads') initDownloads(scope);
       if (name === 'commissions') initCommissions(scope);
       observeReveals();
+      schedulePageScrollCueUpdate();
       // No subsection auto-scroll needed for standalone pages.
     } catch (e) {
       app.innerHTML = '<p style="text-align:center;padding:60px">Could not load page.</p>';

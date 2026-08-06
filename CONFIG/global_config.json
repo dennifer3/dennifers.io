@@ -1,0 +1,129 @@
+{
+  "featured": {
+    "eyebrow": "Featured Pick",
+    "heading": "Spotlight From The Archive",
+    "label": "Featured World",
+    "visibility": "Public",
+    "title": "Dennifer's",
+    "description": "A featured VRChat world pick with a personal hangout feel, cozy details, and plenty of corners to explore.",
+    "image": "VRC_WORLDS/Dennifer's/VRChat_2026-08-05_19-40-54.277_1920x1080.png",
+    "imageAlt": "Dennifer's VRChat world",
+    "href": "#/portfolio",
+    "page": "portfolio",
+    "cta": "View in Portfolio"
+  },
+  "welcome": {
+    "tools": [
+      "Unity 3D",
+      "Blender",
+      "VS & VS Code",
+      "World Making & Editing",
+      "World Optimization",
+      "Unity UI",
+      "C#",
+      "UdonSharp",
+      "gLua"
+    ],
+    "intro": {
+      "kicker": "Self-taught creator",
+      "title": "Building cozy, chill, and party worlds all around!",
+      "description": "I make VRChat worlds, VRChat systems, UI menus, and personal game experiences with a hands on, learn by building approach. Most of my work starts as curiosity, then turns into something people can explore, use, or hang out in"
+    },
+    "signals": [
+      {
+        "title": "Unity",
+        "description": "Main workspace"
+      },
+      {
+        "title": "VRChat",
+        "description": "Worlds & social spaces"
+      },
+      {
+        "title": "UdonSharp",
+        "description": "VRChat world features & menus"
+      }
+    ],
+    "makes": {
+      "eyebrow": "What I Make",
+      "title": "Worlds, menus, and experiences.",
+      "description": "I like making things that feel functional, atmospheric, and a little personal.",
+      "items": [
+        {
+          "title": "VRChat Worlds",
+          "description": "Custom spaces, hangouts, showcases, and world edits built around mood, flow, and playability."
+        },
+        {
+          "title": "Unity UI",
+          "description": "Menus, toggles, panels, and interactive layouts that feel clean inside a world or project."
+        },
+        {
+          "title": "World Systems",
+          "description": "UdonSharp features, managers, movement tools, QoL scripts, and small systems that make worlds feel alive."
+        },
+        {
+          "title": "Optimization Help",
+          "description": "Practical cleanup and performance-minded edits so worlds are easier to run, share, and maintain."
+        }
+      ]
+    },
+    "flow": [
+      {
+        "title": "Explore",
+        "description": "Browse worlds, photos, and downloads."
+      },
+      {
+        "title": "Ask",
+        "description": "Reach out with an idea through Discord."
+      },
+      {
+        "title": "Build",
+        "description": "I turn the idea into something real."
+      },
+      {
+        "title": "Share",
+        "description": "Test, polish, and show it off."
+      }
+    ]
+  },
+  "projectMeta": {
+    "VRC_WORLDS": {
+      "Afterglow Woods": {
+        "visibility": "Private",
+        "vrcUrl": ""
+      },
+      "Area D": {
+        "visibility": "Private",
+        "vrcUrl": ""
+      },
+      "CD3": {
+        "visibility": "Private",
+        "vrcUrl": ""
+      },
+      "Den's Apartment": {
+        "visibility": "Private",
+        "vrcUrl": ""
+      },
+      "Dennifer's": {
+        "visibility": "Public",
+        "vrcUrl": "https://vrchat.com/home/world/wrld_64f0d7ea-ed12-4027-9353-9f55b11f67c7/info"
+      },
+      "Prism Hall": {
+        "visibility": "Private",
+        "vrcUrl": ""
+      },
+      "Uncle C's Hangout": {
+        "visibility": "Private",
+        "vrcUrl": ""
+      },
+      "Volume 128": {
+        "visibility": "Private",
+        "vrcUrl": ""
+      }
+    },
+    "UNITY_PROJECTS": {
+      "Dash-Neon": {
+        "visibility": "Private"
+      }
+    }
+  }
+}

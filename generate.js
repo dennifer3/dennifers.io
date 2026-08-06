@@ -40,12 +40,14 @@ const EXCLUDE_CATEGORIES = new Set([
   'DOWNLOADS',
   'SUPPORT_PHOTOS',
   'VRC_PHOTOS',
+  'RESOURCES',
+  'CONFIG',
   'tests'
 ]);
 // Map category folder names to friendly labels shown in the UI.
 // Add new entries here when you create a new category folder.
 const CATEGORY_LABELS = {
-  VRC_WORLDS: 'VRChat Worlds',
+  VRC_WORLDS: 'VRC Worlds',
   UNITY_PROJECTS: 'Unity Projects'
 };
 

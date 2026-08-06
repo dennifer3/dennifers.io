@@ -23,7 +23,7 @@ window.PROJECTS = [
   },
   {
     "name": "VRC_WORLDS",
-    "label": "VRChat Worlds",
+    "label": "VRC Worlds",
     "projects": [
       {
         "name": "Afterglow Woods",
