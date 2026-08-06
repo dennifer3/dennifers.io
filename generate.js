@@ -34,8 +34,14 @@ const OUTPUT = path.join(ROOT, 'projects.js');
 const IMAGE_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.avif'
 ]);
-// Ignore VRChat-only photo folders so they do not appear in portfolio.
-const EXCLUDE_CATEGORIES = new Set(['VRC_PHOTOS']);
+// Ignore non-portfolio content folders so they do not appear in portfolio.
+const EXCLUDE_CATEGORIES = new Set([
+  'COMMISIONINFO',
+  'DOWNLOADS',
+  'SUPPORT_PHOTOS',
+  'VRC_PHOTOS',
+  'tests'
+]);
 // Map category folder names to friendly labels shown in the UI.
 // Add new entries here when you create a new category folder.
 const CATEGORY_LABELS = {
@@ -94,10 +100,14 @@ function buildCommissionsData() {
             .map((file) => urlEncode(path.join('COMMISIONINFO', entry.name, 'images', file)))
         : [];
 
+      const description = Array.isArray(metadata.description)
+        ? metadata.description.join(' ').replace(/\s+/g, ' ').trim()
+        : (metadata.description || 'Commission offering details coming soon.');
+
       return {
         id: entry.name,
         category: metadata.category || entry.name.replace(/_/g, ' '),
-        description: metadata.description || 'Commission offering details coming soon.',
+        description,
         images
       };
     });
@@ -172,6 +182,8 @@ function build() {
   });
 }
 
-build();
+if (require.main === module) {
+  build();
+}
 
-module.exports = { buildCommissionsData };
+module.exports = { build, buildCommissionsData };

@@ -18,7 +18,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const ROOT = __dirname;
 const DOWNLOADS_DIR = path.join(ROOT, 'DOWNLOADS');
 const COMMISSIONS_DIR = path.join(ROOT, 'COMMISIONINFO');
@@ -45,6 +45,13 @@ const CATEGORY_LABELS = {
   VRC_WORLDS: 'VRChat Worlds',
   UNITY_PROJECTS: 'Unity Projects'
 };
+const EXCLUDE_PROJECT_CATEGORIES = new Set([
+  'COMMISIONINFO',
+  'DOWNLOADS',
+  'SUPPORT_PHOTOS',
+  'VRC_PHOTOS',
+  'tests'
+]);
 
 function buildProjects() {
   const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.avif']);
@@ -54,7 +61,7 @@ function buildProjects() {
 
   const categories = [];
   const categoryEntries = fs.readdirSync(ROOT, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && e.name !== 'node_modules' && !e.name.startsWith('.'));
+    .filter((e) => e.isDirectory() && e.name !== 'node_modules' && !e.name.startsWith('.') && !EXCLUDE_PROJECT_CATEGORIES.has(e.name));
 
   for (const catEntry of categoryEntries) {
     const catDir = path.join(ROOT, catEntry.name);
@@ -161,10 +168,14 @@ function buildCommissions() {
       const fallbackTags = [metadata.category || 'Commission', 'Unity', 'VRChat'];
       const normalizedTags = tags.length > 0 ? tags : fallbackTags;
 
+      const description = Array.isArray(metadata.description)
+        ? metadata.description.join(' ').replace(/\s+/g, ' ').trim()
+        : (metadata.description || 'Commission offering details coming soon.');
+
       return {
         id: entry.name,
         category: metadata.category || entry.name.replace(/_/g, ' '),
-        description: metadata.description || 'Commission offering details coming soon.',
+        description,
         tags: normalizedTags,
         images,
         folder: entry.name
@@ -310,10 +321,23 @@ const server = http.createServer((req, res) => {
 });
 
 if (require.main === module) {
-  server.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}/portfolio.html`);
-    console.log('   Add category folders / project folders / photos, then refresh.');
-  });
+  function listen(port, attemptsLeft = 10) {
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE' && attemptsLeft > 0) {
+        console.warn(`Port ${port} is busy, trying ${port + 1}...`);
+        listen(port + 1, attemptsLeft - 1);
+        return;
+      }
+      throw err;
+    });
+
+    server.listen(port, () => {
+      console.log(`Server running at http://localhost:${port}/#/home`);
+      console.log('   Add category folders / project folders / photos, then refresh.');
+    });
+  }
+
+  listen(PORT);
 }
 
 module.exports = { buildDownloads, buildCommissions, buildProjects };

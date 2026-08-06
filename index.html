@@ -17,12 +17,14 @@
   <!-- Persistent Navigation -->
   <header class="nav glass">
     <nav class="container nav-inner">
-      <a href="#/home" class="logo" data-page="home" aria-label="Home"></a>
+      <a href="#/home" class="logo" data-page="home" aria-label="Dennifer home">
+      </a>
       <ul class="nav-links">
         <li><a href="#/home" data-page="home">Home</a></li>
         <li><a href="#/welcome" data-page="welcome">Welcome</a></li>
         <li><a href="#/portfolio" data-page="portfolio">Portfolio</a></li>
         <li><a href="#/commissions" data-page="commissions">Commissions</a></li>
+        <li><a href="#/vrchat" data-page="vrchat">VRChat Photos</a></li>
         <li><a href="#/downloads" data-page="downloads">Downloads</a></li>
         <li><a href="#/support" data-page="support">Ko-Fi & Support</a></li>
       </ul>
@@ -34,6 +36,24 @@
 
 <!-- App content mounts here -->
   <main id="app"></main>
+
+  <div class="media-gate" id="mediaGate" aria-hidden="true" aria-live="polite">
+    <div class="media-gate-panel">
+      <div class="media-gate-orbit" aria-hidden="true">
+        <span></span>
+      </div>
+      <p class="media-gate-kicker" id="mediaGateKicker">Fetching Media</p>
+      <h2 id="mediaGateTitle">Loading Pictures</h2>
+      <p class="media-gate-detail" id="mediaGateDetail">Please be patient while the gallery warms up.</p>
+      <div class="media-gate-bar" aria-hidden="true">
+        <span id="mediaGateBar"></span>
+      </div>
+      <div class="media-gate-meta">
+        <span id="mediaGateCount">0 / 0 pictures</span>
+        <span id="mediaGateSize">Measuring media</span>
+      </div>
+    </div>
+  </div>
 
   <!-- Home content (kept in shell; loaded by app.js) -->
   <template id="homeContent">
@@ -59,7 +79,7 @@
           <a href="#/downloads" class="btn btn-primary" data-page="downloads">
             <span class="hub-btn-icon">🔽</span> Downloads
           </a>
-          <a href="#/donatesupport" class="btn btn-primary" data-page="support">
+          <a href="#/support" class="btn btn-primary" data-page="support">
             <span class="hub-btn-icon">☕</span> Ko-Fi & Support
           </a>
         </div>

@@ -12,9 +12,16 @@
   window.__spaLive = true;
 
   const app = document.getElementById('app');
+  const mediaGate = document.getElementById('mediaGate');
+  const mediaGateTitle = document.getElementById('mediaGateTitle');
+  const mediaGateDetail = document.getElementById('mediaGateDetail');
+  const mediaGateKicker = document.getElementById('mediaGateKicker');
+  const mediaGateBar = document.getElementById('mediaGateBar');
+  const mediaGateCount = document.getElementById('mediaGateCount');
+  const mediaGateSize = document.getElementById('mediaGateSize');
 
   // Map route keys to content partial files
-const views = {
+  const views = {
     home: 'index.html',
     welcome: 'welcome.html',
     portfolio: 'portfolio.html',
@@ -37,6 +44,191 @@ const views = {
 
   // Reveal-on-scroll observer (shared)
   let revealObserver = null;
+  let viewCleanup = null;
+  let mediaLoading = false;
+  const loadedMediaSets = new Set();
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function normalizeText(value, fallback = '') {
+    if (Array.isArray(value)) {
+      return value.join(' ').replace(/\s+/g, ' ').trim() || fallback;
+    }
+    return String(value ?? fallback).replace(/\s+/g, ' ').trim();
+  }
+
+  function createViewScope() {
+    const cleanups = [];
+    return {
+      addEvent(target, type, handler, options) {
+        if (!target) return;
+        target.addEventListener(type, handler, options);
+        cleanups.push(() => target.removeEventListener(type, handler, options));
+      },
+      addInterval(callback, delay) {
+        const id = window.setInterval(callback, delay);
+        cleanups.push(() => window.clearInterval(id));
+        return id;
+      },
+      addCleanup(callback) {
+        cleanups.push(callback);
+      },
+      cleanup() {
+        cleanups.splice(0).forEach((fn) => fn());
+      }
+    };
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit += 1;
+    }
+    return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+  }
+
+  function uniqueUrls(urls) {
+    return [...new Set((urls || []).filter(Boolean))];
+  }
+
+  function setMediaGate(open) {
+    mediaLoading = open;
+    document.body.classList.toggle('media-loading', open);
+    app.setAttribute('aria-busy', open ? 'true' : 'false');
+    if (!mediaGate) return;
+    mediaGate.classList.toggle('open', open);
+    mediaGate.setAttribute('aria-hidden', open ? 'false' : 'true');
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (!mediaLoading) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  function updateMediaGate({ title, detail, loaded, total, loadedBytes, totalBytes, measured }) {
+    const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
+    if (mediaGateKicker) mediaGateKicker.textContent = 'Fetching Media';
+    if (mediaGateTitle) mediaGateTitle.textContent = title || 'Loading Pictures';
+    if (mediaGateDetail) mediaGateDetail.textContent = detail || 'Please be patient while the gallery warms up.';
+    if (mediaGateBar) mediaGateBar.style.width = `${percent}%`;
+    if (mediaGateCount) mediaGateCount.textContent = `${loaded} / ${total} picture${total === 1 ? '' : 's'}`;
+    if (mediaGateSize) {
+      const knownSize = totalBytes > 0;
+      mediaGateSize.textContent = knownSize
+        ? `${formatBytes(loadedBytes)} / ${formatBytes(totalBytes)}`
+        : (measured ? 'Size unavailable' : 'Measuring media');
+    }
+  }
+
+  async function getMediaSize(url) {
+    try {
+      const res = await fetch(url, { method: 'HEAD', cache: 'force-cache' });
+      if (!res.ok) return 0;
+      return Number(res.headers.get('content-length')) || 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  function preloadImage(url) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = url;
+    });
+  }
+
+  async function runLimited(items, limit, worker) {
+    let next = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next;
+        next += 1;
+        await worker(items[index], index);
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  async function preloadMediaGroups(groups, pageTitle, cacheKey = pageTitle) {
+    const normalizedGroups = (groups || [])
+      .map((group) => ({
+        label: normalizeText(group.label, pageTitle),
+        urls: uniqueUrls(group.urls)
+      }))
+      .filter((group) => group.urls.length > 0);
+
+    const allUrls = uniqueUrls(normalizedGroups.flatMap((group) => group.urls));
+    if (allUrls.length === 0) return;
+    const stableCacheKey = `${cacheKey}:${allUrls.join('|')}`;
+    if (loadedMediaSets.has(stableCacheKey)) return;
+
+    let loaded = 0;
+    let loadedBytes = 0;
+    let totalBytes = 0;
+    const sizeMap = new Map();
+
+    setMediaGate(true);
+    try {
+      updateMediaGate({
+        title: `Loading ${pageTitle}`,
+        detail: 'Measuring gallery media...',
+        loaded,
+        total: allUrls.length,
+        loadedBytes,
+        totalBytes,
+        measured: false
+      });
+
+      const sizes = await Promise.all(allUrls.map(async (url) => [url, await getMediaSize(url)]));
+      sizes.forEach(([url, size]) => {
+        sizeMap.set(url, size);
+        totalBytes += size;
+      });
+
+      for (const group of normalizedGroups) {
+        await runLimited(group.urls, 6, async (url) => {
+          updateMediaGate({
+            title: `Loading ${pageTitle}`,
+            detail: `Fetching ${group.label} pictures...`,
+            loaded,
+            total: allUrls.length,
+            loadedBytes,
+            totalBytes,
+            measured: true
+          });
+          await preloadImage(url);
+          loaded += 1;
+          loadedBytes += sizeMap.get(url) || 0;
+          updateMediaGate({
+            title: `Loading ${pageTitle}`,
+            detail: `Fetching ${group.label} pictures...`,
+            loaded,
+            total: allUrls.length,
+            loadedBytes,
+            totalBytes,
+            measured: true
+          });
+        });
+      }
+    } finally {
+      loadedMediaSets.add(stableCacheKey);
+      setMediaGate(false);
+    }
+  }
 
   function observeReveals() {
     const els = app.querySelectorAll('.reveal');
@@ -58,7 +250,7 @@ const views = {
   const PALETTE = ['#7f5af0', '#2cb67d', '#e58e27', '#4cc9f0', '#f72585', '#3a86ff', '#06d6a0', '#ff5e7d'];
   let allCategories = [];
 
-  function initPortfolio() {
+  async function initPortfolio(scope) {
     const filtersEl = document.getElementById('filters');
     const gridEl = document.getElementById('portfolioGrid');
     const emptyEl = document.getElementById('emptyState');
@@ -99,12 +291,13 @@ const views = {
       modal.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
     }
+    scope.addCleanup(closeModal);
 
-    prevBtn.addEventListener('click', () => showPhoto(currentIndex - 1));
-    nextBtn.addEventListener('click', () => showPhoto(currentIndex + 1));
-    modalBackdrop.addEventListener('click', closeModal);
-    modalClose.addEventListener('click', closeModal);
-    document.addEventListener('keydown', (e) => {
+    scope.addEvent(prevBtn, 'click', () => showPhoto(currentIndex - 1));
+    scope.addEvent(nextBtn, 'click', () => showPhoto(currentIndex + 1));
+    scope.addEvent(modalBackdrop, 'click', closeModal);
+    scope.addEvent(modalClose, 'click', closeModal);
+    scope.addEvent(document, 'keydown', (e) => {
       if (e.key === 'Escape') closeModal();
       if (modal.classList.contains('open')) {
         if (e.key === 'ArrowLeft') showPhoto(currentIndex - 1);
@@ -147,8 +340,10 @@ const views = {
 
 // Build a single project card and append it to the given grid
     function buildCard(project, category, tint) {
-      const projectName = project.name.replace(/_/g, ' ');
+      const projectName = normalizeText(project.name).replace(/_/g, ' ');
       const coverAlt = projectName;
+      const safeProjectName = escapeHtml(projectName);
+      const safeCategoryLabel = escapeHtml(category.label);
 
       // Build carousel slides from all photos
       let slides = '';
@@ -156,7 +351,7 @@ const views = {
         slides = `<div class="thumb-art">🌌</div>`;
       } else {
         slides = project.photos.map((src, i) => `
-          <img class="thumb-img${i === 0 ? ' active' : ''}" src="${src}" alt="${coverAlt}" loading="lazy" referrerpolicy="no-referrer" />
+          <img class="thumb-img${i === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(coverAlt)}" loading="lazy" referrerpolicy="no-referrer" />
         `).join('');
       }
 
@@ -172,8 +367,8 @@ const views = {
           </div>
         </div>
         <div class="project-info">
-          <span class="tag">${category.label}</span>
-          <h3>${projectName}</h3>
+          <span class="tag">${safeCategoryLabel}</span>
+          <h3>${safeProjectName}</h3>
           <p>${project.photos.length} photo${project.photos.length > 1 ? 's' : ''}</p>
         </div>
       `;
@@ -182,7 +377,7 @@ const views = {
       if (project.photos.length > 1) {
         const slidesList = card.querySelectorAll('.thumb-img');
         let currentSlide = 0;
-        setInterval(() => {
+        scope.addInterval(() => {
           slidesList[currentSlide].classList.remove('active');
           currentSlide = (currentSlide + 1) % slidesList.length;
           slidesList[currentSlide].classList.add('active');
@@ -191,7 +386,7 @@ const views = {
 
       card.querySelector('.gallery-open').addEventListener('click', (e) => {
         e.stopPropagation();
-        openGallery(project.photos, project.name.replace(/_/g, ' '));
+        openGallery(project.photos, projectName);
       });
 
       return card;
@@ -214,7 +409,7 @@ const views = {
 
           const header = document.createElement('div');
           header.className = 'portfolio-section-head';
-          header.innerHTML = `<h2>${category.label}</h2><span>${category.projects.length} project${category.projects.length > 1 ? 's' : ''}</span>`;
+          header.innerHTML = `<h2>${escapeHtml(category.label)}</h2><span>${category.projects.length} project${category.projects.length > 1 ? 's' : ''}</span>`;
           section.appendChild(header);
 
           const subGrid = document.createElement('div');
@@ -242,6 +437,10 @@ const views = {
     }
 
     if (window.PROJECTS && Array.isArray(window.PROJECTS)) {
+      await preloadMediaGroups(window.PROJECTS.map((category) => ({
+        label: category.label,
+        urls: (category.projects || []).flatMap((project) => project.photos || [])
+      })), 'Portfolio', 'portfolio');
       render(window.PROJECTS);
     } else {
       emptyEl.style.display = '';
@@ -254,7 +453,7 @@ const views = {
   }
 
 // ---- VRChat photo gallery rendering logic ----
-  function initVrchat() {
+  async function initVrchat(scope) {
     const filtersEl = document.getElementById('vrchatFilters');
     const gridEl = document.getElementById('vrchatGrid');
     const emptyEl = document.getElementById('vrchatEmpty');
@@ -263,6 +462,7 @@ const views = {
     const modalClose = document.getElementById('vrchatModalClose');
     const img = document.getElementById('vrchatImg');
     const counter = document.getElementById('vrchatCounter');
+    const downloadLink = document.getElementById('vrchatDownload');
     const prevBtn = document.getElementById('vrchatPrevBtn');
     const nextBtn = document.getElementById('vrchatNextBtn');
     const countEl = document.getElementById('vrchatCount');
@@ -334,21 +534,21 @@ const views = {
 
     function buildCard(src) {
       const globalIndex = photoIndexMap.get(src) ?? 0;
+      const safeSrc = escapeHtml(src);
       const card = document.createElement('article');
       card.className = 'vrchat-card reveal';
       card.innerHTML = `
-        <button type="button" class="vrchat-thumb" aria-label="Open VRChat photo ${globalIndex + 1}">
-          <img class="thumb-img active" src="${src}" alt="VRChat photo ${globalIndex + 1}" loading="lazy" referrerpolicy="no-referrer" />
+        <div class="vrchat-thumb">
+          <img class="thumb-img active" src="${safeSrc}" alt="VRChat photo ${globalIndex + 1}" loading="lazy" referrerpolicy="no-referrer" />
           <div class="vrchat-overlay">
-            <span>View</span>
+            <button type="button" class="vrchat-action" aria-label="Open VRChat photo ${globalIndex + 1}">View</button>
+            <a class="vrchat-action" href="${safeSrc}" download target="_blank" rel="noopener noreferrer" aria-label="Download VRChat photo ${globalIndex + 1}">Download</a>
           </div>
-        </button>
+        </div>
       `;
 
-      const thumb = card.querySelector('.vrchat-thumb');
-      if (thumb) {
-        thumb.addEventListener('click', () => openPhoto(globalIndex));
-      }
+      const viewButton = card.querySelector('button.vrchat-action');
+      if (viewButton) viewButton.addEventListener('click', () => openPhoto(globalIndex));
       return card;
     }
 
@@ -402,7 +602,7 @@ const views = {
           const header = document.createElement('div');
           header.className = 'portfolio-section-head';
           header.innerHTML = `
-            <h2>${category.label}</h2>
+            <h2>${escapeHtml(category.label)}</h2>
             <span>${category.photos.length} photo${category.photos.length > 1 ? 's' : ''}</span>
           `;
           section.appendChild(header);
@@ -416,7 +616,7 @@ const views = {
           const monthHeader = document.createElement('div');
           monthHeader.className = 'vrchat-month-head';
           monthHeader.innerHTML = `
-            <p>${monthLabel}</p>
+            <p>${escapeHtml(monthLabel)}</p>
             <span>${photos.length} photo${photos.length > 1 ? 's' : ''}</span>
           `;
 
@@ -442,8 +642,14 @@ const views = {
     function showPhoto(index) {
       const flatPhotos = categories.flatMap((category) => category.photos);
       currentIndex = (index + flatPhotos.length) % flatPhotos.length;
-      img.src = flatPhotos[currentIndex];
+      const currentPhoto = flatPhotos[currentIndex];
+      img.src = currentPhoto;
       counter.textContent = `${currentIndex + 1} / ${flatPhotos.length}`;
+      if (downloadLink) {
+        downloadLink.href = currentPhoto;
+        downloadLink.download = currentPhoto.split('/').pop() || `vrchat-photo-${currentIndex + 1}`;
+        downloadLink.setAttribute('aria-label', `Download VRChat photo ${currentIndex + 1}`);
+      }
       prevBtn.style.display = flatPhotos.length > 1 ? '' : 'none';
       nextBtn.style.display = flatPhotos.length > 1 ? '' : 'none';
     }
@@ -460,12 +666,13 @@ const views = {
       modal.setAttribute('aria-hidden', 'true');
       document.body.style.overflow = '';
     }
+    scope.addCleanup(closeModal);
 
-    prevBtn.addEventListener('click', () => showPhoto(currentIndex - 1));
-    nextBtn.addEventListener('click', () => showPhoto(currentIndex + 1));
-    modalBackdrop.addEventListener('click', closeModal);
-    modalClose.addEventListener('click', closeModal);
-    document.addEventListener('keydown', (e) => {
+    scope.addEvent(prevBtn, 'click', () => showPhoto(currentIndex - 1));
+    scope.addEvent(nextBtn, 'click', () => showPhoto(currentIndex + 1));
+    scope.addEvent(modalBackdrop, 'click', closeModal);
+    scope.addEvent(modalClose, 'click', closeModal);
+    scope.addEvent(document, 'keydown', (e) => {
       if (e.key === 'Escape') closeModal();
       if (modal.classList.contains('open')) {
         if (e.key === 'ArrowLeft') showPhoto(currentIndex - 1);
@@ -473,11 +680,15 @@ const views = {
       }
     });
 
+    await preloadMediaGroups(categories.map((category) => ({
+      label: category.label,
+      urls: category.photos
+    })), 'VRChat Photos', 'vrchat');
     renderFilters();
     renderGrid();
   }
 
-  function initCommissions() {
+  async function initCommissions(scope) {
     const gridEl = document.getElementById('commissionsGrid');
     const emptyEl = document.getElementById('commissionsEmpty');
 
@@ -496,14 +707,21 @@ const views = {
           return;
         }
 
+        await preloadMediaGroups(items.map((item) => ({
+          label: normalizeText(item.category, 'Commission'),
+          urls: item.images || []
+        })), 'Commissions', 'commissions');
+
         emptyEl.style.display = 'none';
 
         items.forEach((item) => {
           const card = document.createElement('article');
           card.className = 'commission-card reveal';
+          const category = normalizeText(item.category, 'Commission');
+          const description = normalizeText(item.description, 'Commission offering details coming soon.');
 
           const imagesMarkup = (item.images || []).length > 0
-            ? (item.images || []).map((src, index) => `<img class="commission-image${index === 0 ? ' active' : ''}" src="${src}" alt="${item.category}" loading="lazy" referrerpolicy="no-referrer" />`).join('')
+            ? (item.images || []).map((src, index) => `<img class="commission-image${index === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(category)}" loading="lazy" referrerpolicy="no-referrer" />`).join('')
             : '<div class="commission-image-placeholder">✦</div>';
 
           card.innerHTML = `
@@ -511,15 +729,15 @@ const views = {
               ${imagesMarkup}
             </div>
             <div class="commission-body">
-              <h3>${item.category}</h3>
-              <p>${item.description}</p>
+              <h3>${escapeHtml(category)}</h3>
+              <p>${escapeHtml(description)}</p>
             </div>
           `;
 
           if ((item.images || []).length > 1) {
             const images = card.querySelectorAll('.commission-image');
             let currentIndex = 0;
-            setInterval(() => {
+            scope.addInterval(() => {
               images[currentIndex].classList.remove('active');
               currentIndex = (currentIndex + 1) % images.length;
               images[currentIndex].classList.add('active');
@@ -548,12 +766,7 @@ const views = {
 
     async function render() {
       try {
-        const candidates = [
-          'downloads.json',
-          '/downloads.json',
-          '/d3nniferio/downloads.json',
-          'http://127.0.0.1:3000/downloads.json'
-        ];
+        const candidates = ['downloads.json'];
 
         let items = null;
         for (const url of candidates) {
@@ -584,10 +797,16 @@ const views = {
         items.forEach((item) => {
           const card = document.createElement('article');
           card.className = 'download-card reveal';
+          const title = normalizeText(item.title, 'Download');
+          const version = normalizeText(item.version, 'Latest');
+          const description = normalizeText(item.description, 'A downloadable item from the archive.');
+          const fileSize = normalizeText(item.fileSize, 'Unknown');
+          const zipUrl = normalizeText(item.zipUrl, '#');
+          const zipFile = normalizeText(item.zipFile, title);
 
-          const tagsMarkup = (item.tags || []).map((tag) => `<span class="download-tag">${tag}</span>`).join('');
+          const tagsMarkup = (item.tags || []).map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('');
           const thumbMarkup = item.thumbnail
-            ? `<img src="${item.thumbnail}" alt="${item.title}" loading="lazy" referrerpolicy="no-referrer" />`
+            ? `<img src="${escapeHtml(item.thumbnail)}" alt="${escapeHtml(title)}" loading="lazy" referrerpolicy="no-referrer" />`
             : `<div class="download-thumb-art">⬇</div>`;
 
           card.innerHTML = `
@@ -597,15 +816,15 @@ const views = {
             <div class="download-card-body">
               <div class="download-card-head">
                 <div>
-                  <h3>${item.title}</h3>
-                  <span class="download-version">${item.version}</span>
+                  <h3>${escapeHtml(title)}</h3>
+                  <span class="download-version">${escapeHtml(version)}</span>
                 </div>
               </div>
-              <p class="download-description">${item.description}</p>
+              <p class="download-description">${escapeHtml(description)}</p>
               <div class="download-tags">${tagsMarkup}</div>
               <div class="download-footer">
-                <span class="download-size">${item.fileSize}</span>
-                <a class="btn btn-primary download-action" href="${item.zipUrl}" download="${item.zipFile || item.title}" target="_blank" rel="noopener noreferrer">Download</a>
+                <span class="download-size">${escapeHtml(fileSize)}</span>
+                <a class="btn btn-primary download-action" href="${escapeHtml(zipUrl)}" download="${escapeHtml(zipFile)}" target="_blank" rel="noopener noreferrer">Download</a>
               </div>
             </div>
           `;
@@ -633,6 +852,12 @@ const views = {
 
 async function loadView(name) {
     if (!views[name]) name = 'home';
+    if (viewCleanup) {
+      viewCleanup.cleanup();
+      viewCleanup = null;
+    }
+    const scope = createViewScope();
+    viewCleanup = scope;
 
     // Update document title
     if (titles[name]) document.title = titles[name];
@@ -656,10 +881,10 @@ async function loadView(name) {
       app.innerHTML = container.innerHTML;
 setActive(name);
       wireNav();
-      if (name === 'portfolio') initPortfolio();
-      if (name === 'vrchat') initVrchat();
-      if (name === 'downloads') initDownloads();
-      if (name === 'commissions') initCommissions();
+      if (name === 'portfolio') await initPortfolio(scope);
+      if (name === 'vrchat') await initVrchat(scope);
+      if (name === 'downloads') initDownloads(scope);
+      if (name === 'commissions') await initCommissions(scope);
       observeReveals();
       // No subsection auto-scroll needed for standalone pages.
     } catch (e) {
@@ -679,6 +904,7 @@ setActive(name);
   function navigate(e) {
     const link = e.currentTarget;
     e.preventDefault();
+    if (mediaLoading) return;
     const page = link.dataset.page;
     location.hash = '/' + page;
   }
@@ -705,7 +931,10 @@ setActive(name);
   // Prevent the default anchor jump for hash links (we handle routing)
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="#/"]');
-    if (a) e.preventDefault();
+    if (a) {
+      e.preventDefault();
+      if (mediaLoading) return;
+    }
   });
 
   route();
