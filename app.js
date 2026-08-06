@@ -1596,6 +1596,10 @@
       return tags.map((tag) => normalizeText(tag)).filter(Boolean);
     }
 
+    function primaryVideoTag(item) {
+      return videoTags(item)[0] || 'Clips';
+    }
+
     function videoSearchText(item) {
       return [
         item.title,
@@ -1608,40 +1612,72 @@
     function renderCards(items) {
       visibleItems = items;
       gridEl.innerHTML = '';
+
+      const groups = new Map();
       items.forEach((item, index) => {
-        const title = normalizeText(item.title, 'Video Clip');
-        const description = normalizeText(item.description, 'A short clip from the archive.');
-        const videoUrl = normalizeText(item.videoUrl, '#');
-        const duration = normalizeText(item.duration);
-        const tags = videoTags(item);
-        const card = document.createElement('article');
-        card.className = 'video-card reveal';
-        card.innerHTML = `
-          <button class="video-preview-button" type="button" data-index="${index}" aria-label="Play ${escapeHtml(title)}">
-            <span class="video-frame">
-              <video muted preload="metadata" playsinline aria-hidden="true">
-                <source src="${escapeHtml(videoUrl)}">
-              </video>
-              <span class="video-play-badge" aria-hidden="true">▶</span>
-            </span>
-          </button>
-          <div class="video-card-body">
-            <div class="video-card-head">
-              <div>
-                <h3>${escapeHtml(title)}</h3>
-                <div class="video-meta">
-                  ${duration ? `<span class="download-size">${escapeHtml(duration)}</span>` : ''}
-                  ${tags.slice(0, 2).map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('')}
-                </div>
-              </div>
-              <button class="video-open" type="button" data-index="${index}">Watch</button>
-            </div>
-            <p>${escapeHtml(description)}</p>
-            ${tags.length > 2 ? `<div class="download-tags">${tags.slice(2).map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
-          </div>
-        `;
-        gridEl.appendChild(card);
+        const label = activeFilter === 'all'
+          ? primaryVideoTag(item)
+          : (videoTags(item).find((tag) => tag.toLowerCase() === activeFilter) || activeFilter);
+        const key = label.toLowerCase();
+        if (!groups.has(key)) {
+          groups.set(key, { label, entries: [] });
+        }
+        groups.get(key).entries.push({ item, index });
       });
+
+      groups.forEach((group) => {
+        const section = document.createElement('section');
+        section.className = 'video-section reveal';
+        section.innerHTML = `
+          <div class="video-section-head">
+            <div>
+              <span>Sub-category</span>
+              <h2>${escapeHtml(group.label)}</h2>
+            </div>
+            <small>${group.entries.length} clip${group.entries.length === 1 ? '' : 's'}</small>
+          </div>
+          <div class="video-section-grid"></div>
+        `;
+
+        const sectionGrid = section.querySelector('.video-section-grid');
+        group.entries.forEach(({ item, index }) => {
+          const title = normalizeText(item.title, 'Video Clip');
+          const description = normalizeText(item.description, 'A short clip from the archive.');
+          const videoUrl = normalizeText(item.videoUrl, '#');
+          const duration = normalizeText(item.duration);
+          const tags = videoTags(item);
+          const card = document.createElement('article');
+          card.className = 'video-card reveal';
+          card.innerHTML = `
+            <button class="video-preview-button" type="button" data-index="${index}" aria-label="Play ${escapeHtml(title)}">
+              <span class="video-frame">
+                <video muted preload="metadata" playsinline aria-hidden="true">
+                  <source src="${escapeHtml(videoUrl)}">
+                </video>
+                <span class="video-play-badge" aria-hidden="true">▶</span>
+              </span>
+            </button>
+            <div class="video-card-body">
+              <div class="video-card-head">
+                <div>
+                  <h3>${escapeHtml(title)}</h3>
+                  <div class="video-meta">
+                    ${duration ? `<span class="download-size">${escapeHtml(duration)}</span>` : ''}
+                    ${tags.slice(0, 2).map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('')}
+                  </div>
+                </div>
+                <button class="video-open" type="button" data-index="${index}">Watch</button>
+              </div>
+              <p>${escapeHtml(description)}</p>
+              ${tags.length > 2 ? `<div class="download-tags">${tags.slice(2).map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+            </div>
+          `;
+          sectionGrid.appendChild(card);
+        });
+
+        gridEl.appendChild(section);
+      });
+
       gridEl.querySelectorAll('[data-index]').forEach((button) => {
         button.addEventListener('click', () => {
           const item = visibleItems[Number(button.dataset.index)];

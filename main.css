@@ -2655,6 +2655,57 @@ input:focus-visible {
 .videos-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+
+.video-section {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    rgba(10, 10, 20, 0.18);
+}
+
+.video-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.video-section-head span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--primary-2);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+
+.video-section-head h2 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+}
+
+.video-section-head small {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 90, 240, 0.22);
+  background: rgba(127, 90, 240, 0.1);
+  color: #c6b8ff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.video-section-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -3641,6 +3692,13 @@ input:focus-visible {
   }
   .video-frame {
     min-height: 190px;
+  }
+  .video-section {
+    padding: 12px;
+  }
+  .video-section-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
   .video-card-body {
     padding: 16px;

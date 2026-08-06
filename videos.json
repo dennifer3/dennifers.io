@@ -20,5 +20,16 @@
     "duration": "",
     "videoUrl": "VIDEOS/clip2/overwatch.mp4",
     "folder": "clip2"
+  },
+  {
+    "id": "clip3",
+    "title": "100% Ger-Beer",
+    "description": "c9 :(",
+    "tags": [
+      "Overwatch"
+    ],
+    "duration": "",
+    "videoUrl": "VIDEOS/clip3/overwatch.mp4",
+    "folder": "clip3"
   }
 ]
