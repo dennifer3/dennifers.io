@@ -50,7 +50,7 @@
   let viewCleanup = null;
   let mediaLoading = false;
   const loadedMediaSets = new Set();
-  const MEDIA_CACHE_STORE_KEY = 'dennifer_media_cache_sets_v1';
+  const MEDIA_CACHE_STORE_KEY = 'dennifer_media_cache_sets_v2';
   const MEDIA_CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 14;
   let globalConfigPromise = null;
   const mediaGateLines = [
@@ -260,30 +260,6 @@
     return true;
   }
 
-  async function imageLooksCached(url) {
-    if (window.performance && typeof window.performance.getEntriesByName === 'function') {
-      const entries = window.performance.getEntriesByName(url);
-      if (entries.some((entry) => entry.initiatorType === 'img' && entry.transferSize === 0 && entry.decodedBodySize > 0)) {
-        return true;
-      }
-    }
-
-    const img = new Image();
-    img.src = url;
-    if (img.complete && img.naturalWidth > 0) return true;
-
-    return false;
-  }
-
-  function mediaProbeSample(urls, sampleSize = 18) {
-    if (urls.length <= sampleSize) return urls;
-    const lastIndex = urls.length - 1;
-    return Array.from({ length: sampleSize }, (_, index) => {
-      const urlIndex = Math.round((index / (sampleSize - 1)) * lastIndex);
-      return urls[urlIndex];
-    });
-  }
-
   async function runLimited(items, limit, worker) {
     let next = 0;
     const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -308,14 +284,8 @@
     if (allUrls.length === 0) return;
     const stableCacheKey = `${cacheKey}:${allUrls.join('|')}`;
     if (loadedMediaSets.has(stableCacheKey)) return;
-    const rememberedCache = isRememberedMediaCache(stableCacheKey);
-
-    const cacheProbeSample = mediaProbeSample(allUrls);
-    const cachedProbe = await Promise.all(cacheProbeSample.map(imageLooksCached));
-    const cachedProbeCount = cachedProbe.filter(Boolean).length;
-    if (cachedProbeSample.length > 0 && cachedProbeCount === cacheProbeSample.length) {
+    if (isRememberedMediaCache(stableCacheKey)) {
       loadedMediaSets.add(stableCacheKey);
-      if (!rememberedCache) rememberMediaCache(stableCacheKey);
       return;
     }
 
