@@ -139,7 +139,9 @@
     const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
     if (mediaGateKicker) mediaGateKicker.textContent = 'Fetching Media';
     if (mediaGateTitle) mediaGateTitle.textContent = title || 'Loading Pictures';
-    if (mediaGateDetail) mediaGateDetail.textContent = detail || 'Please be patient while the gallery warms up.';
+    if (mediaGateDetail && detail !== undefined) {
+      mediaGateDetail.textContent = detail || 'Please be patient while the gallery warms up.';
+    }
     if (mediaGateBar) mediaGateBar.style.width = `${percent}%`;
     if (mediaGateCount) mediaGateCount.textContent = `${loaded} / ${total} picture${total === 1 ? '' : 's'}`;
     if (mediaGateSize) {
@@ -215,6 +217,31 @@
     const sizeMap = new Map();
     const startedAt = performance.now();
     const minimumGateMs = 2200;
+    let activeGroupLabel = pageTitle;
+    let quirkTimer = null;
+
+    function quirkDelay() {
+      return 1500 + Math.floor(Math.random() * 1000);
+    }
+
+    function showQuirkLine() {
+      updateMediaGate({
+        title: `Loading ${pageTitle}`,
+        detail: `${mediaGateLine(Date.now())} ${activeGroupLabel} is almost here.`,
+        loaded,
+        total: allUrls.length,
+        loadedBytes,
+        totalBytes,
+        measured: totalBytes > 0
+      });
+    }
+
+    function scheduleQuirkLine() {
+      quirkTimer = window.setTimeout(() => {
+        showQuirkLine();
+        scheduleQuirkLine();
+      }, quirkDelay());
+    }
 
     setMediaGate(true);
     try {
@@ -233,12 +260,14 @@
         sizeMap.set(url, size);
         totalBytes += size;
       });
+      showQuirkLine();
+      scheduleQuirkLine();
 
       for (const group of normalizedGroups) {
+        activeGroupLabel = group.label;
         await runLimited(group.urls, 6, async (url, index) => {
           updateMediaGate({
             title: `Loading ${pageTitle}`,
-            detail: `${mediaGateLine(index + loaded)} ${group.label} is almost here.`,
             loaded,
             total: allUrls.length,
             loadedBytes,
@@ -250,7 +279,6 @@
           loadedBytes += sizeMap.get(url) || 0;
           updateMediaGate({
             title: `Loading ${pageTitle}`,
-            detail: `${mediaGateLine(index + loaded)} ${group.label} is almost here.`,
             loaded,
             total: allUrls.length,
             loadedBytes,
@@ -261,6 +289,7 @@
       }
     } finally {
       const elapsed = performance.now() - startedAt;
+      if (quirkTimer) window.clearTimeout(quirkTimer);
       if (elapsed < minimumGateMs) {
         await delay(minimumGateMs - elapsed);
       }
