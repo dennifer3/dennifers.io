@@ -180,6 +180,10 @@
     });
   }
 
+  function delay(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
   async function runLimited(items, limit, worker) {
     let next = 0;
     const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -209,6 +213,8 @@
     let loadedBytes = 0;
     let totalBytes = 0;
     const sizeMap = new Map();
+    const startedAt = performance.now();
+    const minimumGateMs = 2200;
 
     setMediaGate(true);
     try {
@@ -229,10 +235,10 @@
       });
 
       for (const group of normalizedGroups) {
-        await runLimited(group.urls, 6, async (url) => {
+        await runLimited(group.urls, 6, async (url, index) => {
           updateMediaGate({
             title: `Loading ${pageTitle}`,
-          detail: `${mediaGateLine(index + loaded)} ${group.label} is almost here.`,
+            detail: `${mediaGateLine(index + loaded)} ${group.label} is almost here.`,
             loaded,
             total: allUrls.length,
             loadedBytes,
@@ -254,6 +260,10 @@
         });
       }
     } finally {
+      const elapsed = performance.now() - startedAt;
+      if (elapsed < minimumGateMs) {
+        await delay(minimumGateMs - elapsed);
+      }
       loadedMediaSets.add(stableCacheKey);
       setMediaGate(false);
     }
@@ -380,7 +390,7 @@
         slides = `<div class="thumb-art">🌌</div>`;
       } else {
         slides = project.photos.map((src, i) => `
-          <img class="thumb-img${i === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(coverAlt)}" loading="lazy" referrerpolicy="no-referrer" />
+          <img class="thumb-img${i === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(coverAlt)}" loading="eager" referrerpolicy="no-referrer" />
         `).join('');
       }
 
@@ -568,7 +578,7 @@
       card.className = 'vrchat-card reveal';
       card.innerHTML = `
         <div class="vrchat-thumb">
-          <img class="thumb-img active" src="${safeSrc}" alt="VRChat photo ${globalIndex + 1}" loading="lazy" referrerpolicy="no-referrer" />
+          <img class="thumb-img active" src="${safeSrc}" alt="VRChat photo ${globalIndex + 1}" loading="eager" referrerpolicy="no-referrer" />
           <div class="vrchat-overlay">
             <button type="button" class="vrchat-action" aria-label="Open VRChat photo ${globalIndex + 1}">View</button>
             <a class="vrchat-action" href="${safeSrc}" download target="_blank" rel="noopener noreferrer" aria-label="Download VRChat photo ${globalIndex + 1}">Download</a>
@@ -745,7 +755,7 @@
           const description = normalizeText(item.description, 'Commission offering details coming soon.');
 
           const imagesMarkup = (item.images || []).length > 0
-            ? (item.images || []).map((src, index) => `<img class="commission-image${index === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(category)}" loading="lazy" referrerpolicy="no-referrer" />`).join('')
+            ? (item.images || []).map((src, index) => `<img class="commission-image${index === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(category)}" loading="eager" referrerpolicy="no-referrer" />`).join('')
             : '<div class="commission-image-placeholder">✦</div>';
 
           card.innerHTML = `
