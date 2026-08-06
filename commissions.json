@@ -42,5 +42,11 @@
       "COMMISIONINFO/3_features/images/VRChat_2026-08-05_20-22-58.766_1920x1080.png",
       "COMMISIONINFO/3_features/images/VRChat_2026-08-05_20-23-30.532_1920x1080.png"
     ]
+  },
+  {
+    "id": "4_optimization",
+    "category": "Optimization & Cleanup",
+    "description": "I can help clean up, organize, and optimize VRChat worlds so they are easier to run, maintain, and share.",
+    "images": []
   }
 ]

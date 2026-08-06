@@ -9,18 +9,19 @@
 (function () {
   'use strict';
 
-const VIDEO_ID = 'Yh2gZUvduqY'; // default song
+const VIDEO_ID = '2T89RtNsQSo'; // default song
 const START_VOLUME = 10;        // 10% volume on load
   const AUTOPLAY = true;          // start playing automatically
 
   // Persist volume + playback position so a refresh resumes seamlessly
-  const STORE_KEY = 'dennifer_music_state';
+  const STORE_KEY = `dennifer_music_state_${VIDEO_ID}`;
   let savedState = null;
   try { savedState = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); }
   catch (e) { savedState = null; }
 
   let player = null;
   let isPlaying = false;
+  let timeTimer = null;
 
   // --- DOM refs ---
   const playerEl = document.getElementById('musicPlayer');
@@ -39,15 +40,23 @@ const START_VOLUME = 10;        // 10% volume on load
   // --- Collapse / expand ---
   function setCollapsed(collapsed) {
     playerEl.classList.toggle('collapsed', collapsed);
+    playerEl.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     const body = playerEl.querySelector('.mp-body');
-    if (body) body.style.display = collapsed ? 'none' : '';
+    if (body) body.style.display = '';
   }
 
   if (collapseBtn) {
-    collapseBtn.addEventListener('click', () => {
+    collapseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       setCollapsed(!playerEl.classList.contains('collapsed'));
     });
   }
+
+  playerEl.addEventListener('click', (e) => {
+    if (!playerEl.classList.contains('collapsed')) return;
+    if (e.target.closest('button, input, a')) return;
+    setCollapsed(false);
+  });
 
   // --- Visualizer ---
   const VIS_BARS = 32;
@@ -116,6 +125,46 @@ const START_VOLUME = 10;        // 10% volume on load
     if (!playBtn) return;
     playBtn.innerHTML = isPlaying ? '❚❚' : '▶';
     playBtn.classList.toggle('playing', isPlaying);
+    playerEl.classList.toggle('playing', isPlaying);
+  }
+
+  function formatTime(seconds) {
+    const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+    const minutes = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
+    return `${minutes}:${String(secs).padStart(2, '0')}`;
+  }
+
+  function updateTimeLabel() {
+    if (!timeEl || !player || typeof player.getCurrentTime !== 'function') return;
+    try {
+      timeEl.textContent = formatTime(player.getCurrentTime());
+    } catch (e) {
+      timeEl.textContent = '0:00';
+    }
+  }
+
+  function startTimeTimer() {
+    if (timeTimer) return;
+    updateTimeLabel();
+    timeTimer = window.setInterval(updateTimeLabel, 500);
+  }
+
+  function stopTimeTimer() {
+    if (!timeTimer) return;
+    window.clearInterval(timeTimer);
+    timeTimer = null;
+    updateTimeLabel();
+  }
+
+  function updateTrackTitle() {
+    if (!titleEl || !player || typeof player.getVideoData !== 'function') return;
+    try {
+      const data = player.getVideoData();
+      if (data && data.title) titleEl.textContent = data.title;
+    } catch (e) {
+      /* keep fallback title */
+    }
   }
 
   playBtn.addEventListener('click', () => {
@@ -143,10 +192,7 @@ const START_VOLUME = 10;        // 10% volume on load
     if (player) player.setVolume(v);
     if (volumeSlider) {
       volumeSlider.value = v;
-      // Update slider track highlight to match knob position
-      try {
-        volumeSlider.style.background = `linear-gradient(90deg, var(--primary) ${v}%, rgba(127, 90, 240, 0.2) ${v}%)`;
-      } catch (e) { /* ignore styling errors */ }
+      volumeSlider.style.setProperty('--mp-volume-level', `${v}%`);
     }
     if (volumeLabel) volumeLabel.textContent = v + '%';
   }
@@ -160,6 +206,7 @@ const START_VOLUME = 10;        // 10% volume on load
     volumeSlider.min = 0;
     volumeSlider.max = 100;
     volumeSlider.value = initialVolume;
+    volumeSlider.style.setProperty('--mp-volume-level', `${initialVolume}%`);
     if (volumeLabel) volumeLabel.textContent = initialVolume + '%';
     volumeSlider.addEventListener('input', () => {
       setVolume(parseInt(volumeSlider.value, 10));
@@ -207,6 +254,7 @@ const START_VOLUME = 10;        // 10% volume on load
       playerVars: {
         autoplay: AUTOPLAY ? 1 : 0,
         controls: 0,
+        list: 'RD2T89RtNsQSo',
         rel: 0,
         playsinline: 1
       },
@@ -214,6 +262,10 @@ events: {
         onReady: (e) => {
           // Restore saved volume, or use the default
           setVolume(initialVolume);
+          updateTrackTitle();
+          window.setTimeout(updateTrackTitle, 800);
+          window.setTimeout(updateTrackTitle, 1800);
+          updateTimeLabel();
           // Resume from the saved position, if any
           if (savedState && typeof savedState.time === 'number' && savedState.time > 0) {
             try { player.seekTo(savedState.time, true); } catch (e) { /* ignore */ }
@@ -224,11 +276,14 @@ events: {
         },
         onStateChange: (e) => {
           isPlaying = e.data === YT.PlayerState.PLAYING;
+          updateTrackTitle();
           updatePlayUI();
           if (isPlaying) {
             startAnim();
+            startTimeTimer();
           } else {
             stopAnim();
+            stopTimeTimer();
           }
         },
         onError: () => {

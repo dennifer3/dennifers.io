@@ -1,46 +1,63 @@
-<!-- Ko‑Fi & Support partial — content only (loaded into #app by app.js) -->
+<!-- Ko-Fi & Support partial - content only (loaded into #app by app.js) -->
 <script>
-	// If this file is opened/refreshed directly (not through the SPA),
-	// redirect to the app shell and restore the same view via the hash.
-	if (!window.__spaLive) { location.replace('index.html#/support'); }
+  // If this file is opened/refreshed directly (not through the SPA),
+  // redirect to the app shell and restore the same view via the hash.
+  if (!window.__spaLive) { location.replace('index.html#/support'); }
 </script>
+
 <section class="section support-hero">
-	<div class="container">
-		<div class="section-head">
-			<h1><span class="gradient-text">Ko-Fi & Support</span></h1>
-			<p class="section-sub">Throw some funding and help me keep creating.</p>
-		</div>
+  <div class="container">
+    <div class="support-spotlight reveal">
+      <div class="support-copy">
+        <p class="eyebrow">Ko-Fi & Support</p>
+        <h1>Help keep the <span class="gradient-text">worlds glowing.</span></h1>
+        <p>
+          Support helps me keep learning, building, buying useful assets, hosting files, and sharing more VRChat worlds,
+          tools, and experiments with the community.
+        </p>
+        <div class="support-actions">
+          <a href="https://ko-fi.com/dennifer/" class="btn btn-primary" target="_blank" rel="noopener">Support on Ko-Fi</a>
+          <a href="https://paypal.me/dennifur" class="btn btn-ghost" target="_blank" rel="noopener">Support via PayPal</a>
+        </div>
+        <p class="support-soft-note">No pressure. Visiting, sharing, or hanging out in my worlds already means a lot.</p>
+        <div class="support-contributors" id="supportContributors"></div>
+      </div>
 
-		<div class="support-columns">
-      
-			<!-- Column A: TEXT | PICTURE (slides in from left) -->
-			<article class="support-col reveal">
-				<div class="support-body">
-					<h3>Support via Ko‑Fi</h3>
-					<p>Buy me a coffee to help fund tools, hosting, and asset purchases. Every little bit helps and keeps the Dennifers alive.</p>
-					<div class="support-actions">
-						<a href="https://ko-fi.com/dennifer/" class="btn btn-primary" target="_blank" rel="noopener">Support me on Ko‑Fi</a>
-					</div>
-				</div>
-				<div class="support-media">
-					<img src="SUPPORT_PHOTOS/kofi.png" alt="Ko‑Fi" loading="lazy" />
-				</div>
-			</article>
+      <div class="support-visual" aria-hidden="true">
+        <div class="support-orbit-card is-kofi">
+          <img src="SUPPORT_PHOTOS/kofi.png" alt="" loading="lazy" />
+        </div>
+        <div class="support-orbit-card is-paypal">
+          <img src="SUPPORT_PHOTOS/paypal.png" alt="" loading="lazy" />
+        </div>
+        <div class="support-glow-card">
+          <span>Support fuels</span>
+          <strong>worlds, tools, and cozy experiments.</strong>
+        </div>
+      </div>
+    </div>
 
-      <article class="support-col reveal">
-				<div class="support-body">
-					<h3>Support via PayPal</h3>
-					<p>If you do not or would rather not use Ko-Fi, I have a pay directly to paypal button here. Cheers friend!</p>
-					<div class="support-actions">
-						<a href="https://paypal.me/dennifur" class="btn btn-primary" target="_blank" rel="noopener">Support me via PayPal</a>
-					</div>
-				</div>
-				<div class="support-media">
-				<img src="SUPPORT_PHOTOS/paypal.png" alt="PayPal" loading="lazy" />
-				</div>
-			</article>
-
-			<!-- Add more .support-col blocks to extend the page modularly -->
-		</div>
-	</div>
+    <div class="support-impact-grid">
+      <article class="support-impact-card reveal">
+        <span>01</span>
+        <h3>World Assets</h3>
+        <p>Models, textures, shaders, audio, and little details that help spaces feel finished.</p>
+      </article>
+      <article class="support-impact-card reveal">
+        <span>02</span>
+        <h3>Unity Tools</h3>
+        <p>Time spent building scripts, menus, systems, and reusable pieces for future projects.</p>
+      </article>
+      <article class="support-impact-card reveal">
+        <span>03</span>
+        <h3>Hosting & Files</h3>
+        <p>Keeping downloads, screenshots, pages, and project resources easier to access.</p>
+      </article>
+      <article class="support-impact-card reveal">
+        <span>04</span>
+        <h3>Build Time</h3>
+        <p>More room to experiment, polish, test, and share the weird little ideas that become real.</p>
+      </article>
+    </div>
+  </div>
 </section>

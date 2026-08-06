@@ -5,14 +5,20 @@
   if (!window.__spaLive) { location.replace('index.html#/welcome'); }
 </script>
 <section class="section welcome-hero">
-  <div class="container welcome-center">
-    <h1 class="welcome-title">
-      Welcome to <span class="gradient-text">Dennifer's website</span>.<br />
-    </h1>
-    <p class="welcome-sub">
-      Using Unity for personal game projects and creating VRChat worlds from scratch, self-taught!
-    </p>
-    <div class="welcome-tools" id="welcomeTools"></div>
+  <div class="container welcome-top">
+    <div class="welcome-hero-copy">
+      <p class="welcome-badge" id="welcomeSnapshotKicker">VRChat Creator / Unity / UdonSharp</p>
+      <h1 class="welcome-title" id="welcomeSnapshotTitle">
+        Welcome to <span class="gradient-text">Dennifer's website</span>.
+      </h1>
+      <p class="welcome-sub" id="welcomeSnapshotDescription">
+        Using Unity for personal game projects and creating VRChat worlds from scratch, self-taught!
+      </p>
+      <div class="welcome-actions" id="welcomeSnapshotActions"></div>
+      <div class="welcome-tools" id="welcomeTools"></div>
+    </div>
+
+    <div class="welcome-preview reveal" id="welcomePreview"></div>
 
     <div class="social-row">
       <span class="social-label">Find me here</span>

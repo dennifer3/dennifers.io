@@ -12,11 +12,44 @@
     "page": "portfolio",
     "cta": "View in Portfolio"
   },
+  "support": {
+    "contributors": {
+      "title": "Top Ko-Fi Contributor",
+      "items": [
+        {
+          "name": "Baj Lemur",
+          "label": "50$",
+          "href": ""
+        }
+      ]
+    }
+  },
   "welcome": {
+    "snapshot": {
+      "kicker": "VRChat Creator / Unity / UdonSharp",
+      "titlePrefix": "Welcome to",
+      "titleHighlight": "Dennifer's website",
+      "description": "World creator, feature maker and optimizer! I take commissions, create cool worlds to party or hangout and chill in!",
+      "actions": [
+        {
+          "label": "View Portfolio",
+          "href": "#/portfolio",
+          "page": "portfolio",
+          "primary": true
+        },
+        {
+          "label": "Commission Info",
+          "href": "#/commissions",
+          "page": "commissions",
+          "primary": false
+        }
+      ],
+      "previewImages": []
+    },
     "tools": [
       "Unity 3D",
       "Blender",
-      "VS & VS Code",
+      "VS Code",
       "World Making & Editing",
       "World Optimization",
       "Unity UI",
@@ -85,6 +118,29 @@
       }
     ]
   },
+  "commissions": {
+    "finished": {
+      "eyebrow": "Finished Work",
+      "title": "Completed & delivered commissions.",
+      "description": "Some finished pieces and examples that show the kind of VRChat work I can deliver.",
+      "items": [
+        {
+          "title": "Uncle C's Hangout",
+          "builtFor": "Uncle C",
+          "summary": "A Vibey yet exciting VRChat hangout world to party and chill at.",
+          "imageFolder": "VRC_WORLDS/Uncle C's Hangout/",
+          "tags": ["World", "VRChat"]
+        },
+        {
+          "title": "Volume 128",
+          "builtFor": "Saturn Storm",
+          "summary": "A modern, sleek chill VRChat home world with a nice skybox and cozy details.",
+          "imageFolder": "VRC_WORLDS/Volume 128/",
+          "tags": ["World", "VRChat"]
+        }
+      ]
+    }
+  },
   "projectMeta": {
     "VRC_WORLDS": {
       "Afterglow Woods": {
@@ -113,10 +169,16 @@
       },
       "Uncle C's Hangout": {
         "visibility": "Private",
+        "commissioned": true,
+        "commissionerName": "Uncle C",
+        "commissionerVrcUrl": "https://vrchat.com/home/user/usr_1bf77e00-1895-4a3e-abfb-496248c9f392",
         "vrcUrl": ""
       },
       "Volume 128": {
         "visibility": "Private",
+        "commissioned": true,
+        "commissionerName": "Saturn Storm",
+        "commissionerVrcUrl": "https://vrchat.com/home/user/usr_cde6176d-b3b1-477d-aae2-266707aacbfa",
         "vrcUrl": ""
       }
     },

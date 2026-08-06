@@ -97,11 +97,20 @@
   <aside class="music-player" id="musicPlayer">
     <div class="mp-header">
       <span class="mp-disc">♫</span>
-      <span class="mp-title">Now Playing</span>
+      <span class="mp-title-wrap">
+        <span class="mp-kicker">Audio Stream</span>
+        <span class="mp-title">Loading Track...</span>
+      </span>
       <button class="mp-collapse" aria-label="Collapse player">–</button>
     </div>
     <div class="mp-body">
       <canvas class="mp-visualizer"></canvas>
+      <div class="mp-status" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
       <div class="mp-controls">
         <button class="mp-play" aria-label="Play / Pause">▶</button>
         <button class="mp-restart" aria-label="Restart song">⟲</button>

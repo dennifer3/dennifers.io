@@ -50,6 +50,8 @@
   let viewCleanup = null;
   let mediaLoading = false;
   const loadedMediaSets = new Set();
+  const MEDIA_CACHE_STORE_KEY = 'dennifer_media_cache_sets_v1';
+  const MEDIA_CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 14;
   let globalConfigPromise = null;
   const mediaGateLines = [
     'Chasing loose pixels through the vents...',
@@ -125,6 +127,21 @@
       .split('/')
       .map((part) => encodeURIComponent(decodeURIComponent(part)))
       .join('/');
+  }
+
+  function parseHashRoute() {
+    const raw = location.hash.replace(/^#\/?/, '');
+    const [pagePart = '', queryPart = ''] = raw.split('?');
+    return {
+      page: pagePart.toLowerCase(),
+      params: new URLSearchParams(queryPart)
+    };
+  }
+
+  function targetKey(value) {
+    return normalizeText(value)
+      .replace(/_/g, ' ')
+      .toLowerCase();
   }
 
   async function loadGlobalConfig() {
@@ -216,6 +233,49 @@
     return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
+  function getStoredMediaCache() {
+    try {
+      const cache = JSON.parse(localStorage.getItem(MEDIA_CACHE_STORE_KEY) || '{}');
+      return cache && typeof cache === 'object' ? cache : {};
+    } catch (err) {
+      return {};
+    }
+  }
+
+  function rememberMediaCache(cacheKey) {
+    try {
+      const cache = getStoredMediaCache();
+      cache[cacheKey] = Date.now();
+      localStorage.setItem(MEDIA_CACHE_STORE_KEY, JSON.stringify(cache));
+    } catch (err) {
+      /* storage can be unavailable in private modes */
+    }
+  }
+
+  function isRememberedMediaCache(cacheKey) {
+    const cache = getStoredMediaCache();
+    const cachedAt = Number(cache[cacheKey]) || 0;
+    if (!cachedAt) return false;
+    if (Date.now() - cachedAt > MEDIA_CACHE_MAX_AGE) return false;
+    loadedMediaSets.add(cacheKey);
+    return true;
+  }
+
+  async function imageLooksCached(url) {
+    if (performance && typeof performance.getEntriesByName === 'function') {
+      const entries = performance.getEntriesByName(url);
+      if (entries.some((entry) => entry.initiatorType === 'img' && entry.transferSize === 0 && entry.decodedBodySize > 0)) {
+        return true;
+      }
+    }
+
+    const img = new Image();
+    img.src = url;
+    if (img.complete && img.naturalWidth > 0) return true;
+
+    return false;
+  }
+
   async function runLimited(items, limit, worker) {
     let next = 0;
     const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -240,6 +300,16 @@
     if (allUrls.length === 0) return;
     const stableCacheKey = `${cacheKey}:${allUrls.join('|')}`;
     if (loadedMediaSets.has(stableCacheKey)) return;
+    if (isRememberedMediaCache(stableCacheKey)) return;
+
+    const cacheProbeSample = allUrls.slice(0, Math.min(allUrls.length, 18));
+    const cachedProbe = await Promise.all(cacheProbeSample.map(imageLooksCached));
+    const cachedProbeCount = cachedProbe.filter(Boolean).length;
+    if (cachedProbeSample.length > 0 && cachedProbeCount === cacheProbeSample.length) {
+      loadedMediaSets.add(stableCacheKey);
+      rememberMediaCache(stableCacheKey);
+      return;
+    }
 
     let loaded = 0;
     let loadedBytes = 0;
@@ -324,6 +394,7 @@
         await delay(minimumGateMs - elapsed);
       }
       loadedMediaSets.add(stableCacheKey);
+      rememberMediaCache(stableCacheKey);
       setMediaGate(false);
     }
   }
@@ -490,10 +561,22 @@
       const safeCategoryLabel = escapeHtml(category.label);
       const meta = (projectMeta[category.name] && projectMeta[category.name][project.name]) || {};
       const visibilityMarkup = visibilityPill(meta.visibility);
+      const commissionedMarkup = meta.commissioned
+        ? '<span class="commissioned-pill">Commissioned</span>'
+        : '';
+      const commissioner = meta.commissioner || {};
+      const commissionerName = normalizeText(meta.commissionerName || commissioner.name);
+      const commissionerVrcUrl = normalizeText(meta.commissionerVrcUrl || meta.commissionerUrl || commissioner.vrcUrl || commissioner.url);
+      const commissionerMarkup = meta.commissioned && commissionerName
+        ? (commissionerVrcUrl
+            ? `<a class="btn project-commissioner-link" href="${escapeHtml(commissionerVrcUrl)}" target="_blank" rel="noopener noreferrer">Commissioner: ${escapeHtml(commissionerName)}</a>`
+            : `<span class="btn project-commissioner-link is-static">Commissioner: ${escapeHtml(commissionerName)}</span>`)
+        : '';
       const vrcUrl = normalizeText(meta.vrcUrl || meta.vrcLink);
       const vrcLinkMarkup = vrcUrl
         ? `<a class="btn btn-primary project-vrc-link" href="${escapeHtml(vrcUrl)}" target="_blank" rel="noopener noreferrer">VRC Link</a>`
         : '';
+      const photoLabel = `${project.photos.length} photo${project.photos.length > 1 ? 's' : ''}`;
 
       // Build carousel slides from all photos
       let slides = '';
@@ -508,24 +591,26 @@
       const card = document.createElement('article');
       card.className = 'project reveal';
       card.dataset.category = category.name;
+      card.dataset.categoryKey = targetKey(category.name);
+      card.dataset.projectKey = targetKey(project.name);
 
       card.innerHTML = `
         <div class="project-thumb" style="--tint:${tint}">
           ${slides}
-          <div class="project-overlay">
-            <div class="project-overlay-actions">
-              <button class="btn btn-primary gallery-open">View Photos${project.photos.length > 1 ? ` (${project.photos.length})` : ''}</button>
-              ${vrcLinkMarkup}
-            </div>
-          </div>
         </div>
         <div class="project-info">
           <div class="project-tags">
             <span class="tag">${safeCategoryLabel}</span>
             ${visibilityMarkup}
+            ${commissionedMarkup}
           </div>
           <h3>${safeProjectName}</h3>
-          <p>${project.photos.length} photo${project.photos.length > 1 ? 's' : ''}</p>
+          <p>${photoLabel}</p>
+          <div class="project-inline-actions">
+            <button class="btn btn-primary gallery-open">View Photos${project.photos.length > 1 ? ` (${project.photos.length})` : ''}</button>
+            ${commissionerMarkup}
+            ${vrcLinkMarkup}
+          </div>
         </div>
       `;
 
@@ -540,12 +625,33 @@
         }, 5000);
       }
 
-      card.querySelector('.gallery-open').addEventListener('click', (e) => {
-        e.stopPropagation();
-        openGallery(project.photos, projectName);
+      card.querySelectorAll('.gallery-open').forEach((button) => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openGallery(project.photos, projectName);
+        });
       });
 
       return card;
+    }
+
+    function scrollToPortfolioTarget() {
+      const { params } = parseHashRoute();
+      const projectTarget = targetKey(params.get('project'));
+      if (!projectTarget) return;
+
+      const categoryTarget = targetKey(params.get('category'));
+      const targetCard = [...gridEl.querySelectorAll('.project')].find((card) => {
+        const projectMatches = card.dataset.projectKey === projectTarget;
+        const categoryMatches = !categoryTarget || card.dataset.categoryKey === categoryTarget;
+        return projectMatches && categoryMatches;
+      });
+
+      if (!targetCard) return;
+
+      targetCard.classList.add('project-target-highlight');
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(() => targetCard.classList.remove('project-target-highlight'), 2600);
     }
 
     function applyFilter(key) {
@@ -597,6 +703,7 @@
         projectMeta = meta || {};
         render(window.PROJECTS);
         schedulePageScrollCueUpdate();
+        window.requestAnimationFrame(scrollToPortfolioTarget);
       });
       preloadMediaGroups(window.PROJECTS.map((category) => ({
         label: category.label,
@@ -908,11 +1015,140 @@
   function initCommissions(scope) {
     const gridEl = document.getElementById('commissionsGrid');
     const emptyEl = document.getElementById('commissionsEmpty');
+    const finishedHeadEl = document.getElementById('finishedCommissionsHead');
+    const finishedGridEl = document.getElementById('finishedCommissionsGrid');
 
     if (!gridEl) return;
 
+    function renderFinishedCommissions(finishedConfig) {
+      if (!finishedHeadEl || !finishedGridEl) return [];
+
+      const config = finishedConfig || {};
+      const items = Array.isArray(config.items) ? config.items : [];
+      if (items.length === 0) {
+        finishedHeadEl.style.display = 'none';
+        finishedGridEl.style.display = 'none';
+        return [];
+      }
+
+      finishedHeadEl.style.display = '';
+      finishedGridEl.style.display = '';
+      finishedHeadEl.innerHTML = `
+        <p class="eyebrow">${escapeHtml(normalizeText(config.eyebrow, 'Finished Work'))}</p>
+        <h2><span class="gradient-text">${escapeHtml(normalizeText(config.title, 'Completed commissions.'))}</span></h2>
+        <p>${escapeHtml(normalizeText(config.description, 'Finished examples and delivered builds.'))}</p>
+      `;
+
+      function normalizeFolderPath(pathValue) {
+        return normalizeText(pathValue)
+          .replace(/\\/g, '/')
+          .split('/')
+          .filter(Boolean)
+          .map((part) => {
+            try {
+              return decodeURIComponent(part);
+            } catch (err) {
+              return part;
+            }
+          })
+          .join('/')
+          .toLowerCase();
+      }
+
+      function photosFromImageFolder(folderPath) {
+        const normalizedFolder = normalizeFolderPath(folderPath);
+        if (!normalizedFolder || !Array.isArray(window.PROJECTS)) return [];
+
+        const categoryFolder = window.PROJECTS.flatMap((category) => {
+          const categoryName = normalizeFolderPath(category.name);
+          const categoryLabel = normalizeFolderPath(category.label);
+          return (category.projects || []).flatMap((project) => {
+            const projectName = normalizeFolderPath(project.name);
+            const categoryProjectMatches =
+              normalizedFolder === `${categoryName}/${projectName}` ||
+              normalizedFolder === `${categoryLabel}/${projectName}`;
+
+            if (categoryProjectMatches) return project.photos || [];
+            return [];
+          });
+        });
+
+        if (categoryFolder.length > 0) return categoryFolder;
+
+        return window.PROJECTS
+          .flatMap((category) => category.projects || [])
+          .flatMap((project) => project.photos || [])
+          .filter((photo) => normalizeFolderPath(photo).startsWith(`${normalizedFolder}/`));
+      }
+
+      function imagesForFinishedItem(item) {
+        const configuredImages = Array.isArray(item.images) ? item.images : [];
+        if (configuredImages.length > 0) {
+          return uniqueUrls(configuredImages.map(encodeAssetPath));
+        }
+
+        const folderImages = photosFromImageFolder(item.imageFolder || item.imageFolderPath);
+        if (folderImages.length > 0) {
+          return uniqueUrls(folderImages.map(encodeAssetPath));
+        }
+
+        const legacyImage = normalizeText(item.image);
+        if (legacyImage.endsWith('/')) {
+          return uniqueUrls(photosFromImageFolder(legacyImage).map(encodeAssetPath));
+        }
+        return legacyImage ? [encodeAssetPath(legacyImage)] : [];
+      }
+
+      const finishedMedia = items.map(imagesForFinishedItem);
+
+      finishedGridEl.innerHTML = items.map((item, itemIndex) => {
+        const title = normalizeText(item.title, 'Finished Commission');
+        const builtFor = normalizeText(item.builtFor || item.client, 'Commission');
+        const summary = normalizeText(item.summary, 'Completed VRChat commission work.');
+        const images = finishedMedia[itemIndex] || [];
+        const tags = Array.isArray(item.tags) ? item.tags : [];
+        const tagMarkup = tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join('');
+        const imageMarkup = images.length > 0
+          ? images.map((src, index) => `<img class="finished-commission-image${index === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(title)}" loading="eager" />`).join('')
+          : '<div class="finished-commission-placeholder">Done</div>';
+
+        return `
+          <article class="finished-commission-card reveal">
+            <div class="finished-commission-media">
+              ${imageMarkup}
+            </div>
+            <div class="finished-commission-body">
+              <div class="finished-commission-built-for">
+                <span>Build For:</span>
+                <strong>${escapeHtml(builtFor)}</strong>
+              </div>
+              <h3>${escapeHtml(title)}</h3>
+              <p>${escapeHtml(summary)}</p>
+              <div class="finished-commission-tags">${tagMarkup}</div>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      finishedGridEl.querySelectorAll('.finished-commission-media').forEach((mediaEl) => {
+        const images = mediaEl.querySelectorAll('.finished-commission-image');
+        if (images.length <= 1) return;
+
+        let currentIndex = 0;
+        scope.addInterval(() => {
+          images[currentIndex].classList.remove('active');
+          currentIndex = (currentIndex + 1) % images.length;
+          images[currentIndex].classList.add('active');
+        }, 5000);
+      });
+
+      return uniqueUrls(finishedMedia.flat());
+    }
+
     async function render() {
       try {
+        const globalConfig = await loadGlobalConfig();
+        const finishedImages = renderFinishedCommissions(globalConfig.commissions && globalConfig.commissions.finished);
         const res = await fetch('commissions.json', { cache: 'no-store' });
         if (!res.ok) throw new Error('Unable to load commissions data');
         const items = await res.json();
@@ -956,15 +1192,19 @@
             }, 5000);
           }
 
-          gridEl.appendChild(card);
-        });
+        gridEl.appendChild(card);
+      });
 
         observeReveals();
         schedulePageScrollCueUpdate();
-        preloadMediaGroups(items.map((item) => ({
+        const serviceGroups = items.map((item) => ({
           label: normalizeText(item.category, 'Commission'),
           urls: item.images || []
-        })), 'Commissions', 'commissions').catch((err) => console.warn('Commission media preload skipped:', err));
+        }));
+        if (finishedImages.length > 0) {
+          serviceGroups.push({ label: 'Finished Work', urls: finishedImages });
+        }
+        preloadMediaGroups(serviceGroups, 'Commissions', 'commissions').catch((err) => console.warn('Commission media preload skipped:', err));
       } catch (err) {
         console.error(err);
         emptyEl.style.display = '';
@@ -978,8 +1218,96 @@
   function initDownloads() {
     const gridEl = document.getElementById('downloadsGrid');
     const emptyEl = document.getElementById('downloadsEmpty');
+    const featuredEl = document.getElementById('downloadsFeatured');
+    const toolbarEl = document.getElementById('downloadsToolbar');
+    const filtersEl = document.getElementById('downloadsFilters');
+    const searchEl = document.getElementById('downloadsSearch');
 
     if (!gridEl) return;
+
+    let activeFilter = 'all';
+    let searchTerm = '';
+
+    function downloadSearchText(item) {
+      return [
+        item.title,
+        item.version,
+        item.description,
+        item.fileSize,
+        ...(Array.isArray(item.tags) ? item.tags : [])
+      ].map((value) => normalizeText(value).toLowerCase()).join(' ');
+    }
+
+    function primaryDownloadTag(item) {
+      const tags = Array.isArray(item.tags) ? item.tags : [];
+      return normalizeText(tags[0], 'Archive');
+    }
+
+    function downloadCardMarkup(item, featured = false) {
+      const title = normalizeText(item.title, 'Download');
+      const version = normalizeText(item.version, 'Latest');
+      const description = normalizeText(item.description, 'A downloadable item from the archive.');
+      const fileSize = normalizeText(item.fileSize, 'Unknown');
+      const zipUrl = normalizeText(item.zipUrl, '#');
+      const zipFile = normalizeText(item.zipFile, title);
+      const tags = Array.isArray(item.tags) ? item.tags : [];
+      const primaryTag = normalizeText(tags[0]);
+      const secondaryTags = tags.slice(1);
+      const tagsMarkup = secondaryTags.map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('');
+      const thumbMarkup = item.thumbnail
+        ? `<img src="${escapeHtml(item.thumbnail)}" alt="${escapeHtml(title)}" loading="lazy" referrerpolicy="no-referrer" />`
+        : `<div class="download-thumb-art">⬇</div>`;
+
+      return `
+        <div class="download-thumb">
+          ${thumbMarkup}
+        </div>
+        <div class="download-card-body">
+          ${featured ? '<span class="download-featured-kicker">Featured Download</span>' : ''}
+          <div class="download-card-head">
+            <div>
+              <h3>${escapeHtml(title)}</h3>
+              <div class="download-meta">
+                ${primaryTag ? `<span class="download-tag download-primary-tag">${escapeHtml(primaryTag)}</span>` : ''}
+                <span class="download-version">${escapeHtml(version)}</span>
+                <span class="download-size">${escapeHtml(fileSize)}</span>
+              </div>
+            </div>
+          </div>
+          <p class="download-description">${escapeHtml(description)}</p>
+          <div class="download-tags">${tagsMarkup}</div>
+        </div>
+        <div class="download-footer">
+          <a class="btn btn-primary download-action" href="${escapeHtml(zipUrl)}" download="${escapeHtml(zipFile)}" target="_blank" rel="noopener noreferrer">Download</a>
+        </div>
+      `;
+    }
+
+    function renderCards(items) {
+      gridEl.innerHTML = '';
+      items.forEach((item) => {
+        const card = document.createElement('article');
+        card.className = 'download-card reveal';
+        card.innerHTML = downloadCardMarkup(item);
+        gridEl.appendChild(card);
+      });
+      observeReveals();
+    }
+
+    function applyDownloadFilters(items) {
+      const filtered = items.filter((item) => {
+        const tagMatches = activeFilter === 'all' || primaryDownloadTag(item).toLowerCase() === activeFilter;
+        const searchMatches = !searchTerm || downloadSearchText(item).includes(searchTerm);
+        return tagMatches && searchMatches;
+      });
+
+      renderCards(filtered);
+      emptyEl.style.display = filtered.length > 0 ? 'none' : '';
+      const emptyText = emptyEl.querySelector('p');
+      if (emptyText && filtered.length === 0) {
+        emptyText.textContent = 'No downloads match that filter or search.';
+      }
+    }
 
     async function render() {
       try {
@@ -1002,8 +1330,6 @@
           throw new Error('Unable to load download data');
         }
 
-        gridEl.innerHTML = '';
-
         if (!Array.isArray(items) || items.length === 0) {
           emptyEl.style.display = '';
           return;
@@ -1011,45 +1337,40 @@
 
         emptyEl.style.display = 'none';
 
-        items.forEach((item) => {
-          const card = document.createElement('article');
-          card.className = 'download-card reveal';
-          const title = normalizeText(item.title, 'Download');
-          const version = normalizeText(item.version, 'Latest');
-          const description = normalizeText(item.description, 'A downloadable item from the archive.');
-          const fileSize = normalizeText(item.fileSize, 'Unknown');
-          const zipUrl = normalizeText(item.zipUrl, '#');
-          const zipFile = normalizeText(item.zipFile, title);
+        if (featuredEl) {
+          if (items.length > 1) {
+            featuredEl.style.display = '';
+            featuredEl.innerHTML = `<article class="download-card download-featured-card reveal">${downloadCardMarkup(items[0], true)}</article>`;
+          } else {
+            featuredEl.style.display = 'none';
+            featuredEl.innerHTML = '';
+          }
+        }
 
-          const tagsMarkup = (item.tags || []).map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('');
-          const thumbMarkup = item.thumbnail
-            ? `<img src="${escapeHtml(item.thumbnail)}" alt="${escapeHtml(title)}" loading="lazy" referrerpolicy="no-referrer" />`
-            : `<div class="download-thumb-art">⬇</div>`;
+        const filterTags = ['all', ...uniqueUrls(items.map((item) => primaryDownloadTag(item).toLowerCase()))];
+        if (toolbarEl && filtersEl && searchEl) {
+          toolbarEl.style.display = '';
+          filtersEl.innerHTML = filterTags.map((tag) => `
+            <button class="download-filter${tag === activeFilter ? ' active' : ''}" type="button" data-filter="${escapeHtml(tag)}">
+              ${escapeHtml(tag === 'all' ? 'All' : tag)}
+            </button>
+          `).join('');
 
-          card.innerHTML = `
-            <div class="download-thumb">
-              ${thumbMarkup}
-            </div>
-            <div class="download-card-body">
-              <div class="download-card-head">
-                <div>
-                  <h3>${escapeHtml(title)}</h3>
-                  <span class="download-version">${escapeHtml(version)}</span>
-                </div>
-              </div>
-              <p class="download-description">${escapeHtml(description)}</p>
-              <div class="download-tags">${tagsMarkup}</div>
-              <div class="download-footer">
-                <span class="download-size">${escapeHtml(fileSize)}</span>
-                <a class="btn btn-primary download-action" href="${escapeHtml(zipUrl)}" download="${escapeHtml(zipFile)}" target="_blank" rel="noopener noreferrer">Download</a>
-              </div>
-            </div>
-          `;
+          filtersEl.querySelectorAll('.download-filter').forEach((button) => {
+            button.addEventListener('click', () => {
+              activeFilter = button.dataset.filter || 'all';
+              filtersEl.querySelectorAll('.download-filter').forEach((filter) => filter.classList.toggle('active', filter === button));
+              applyDownloadFilters(items);
+            });
+          });
 
-          gridEl.appendChild(card);
-        });
+          searchEl.addEventListener('input', () => {
+            searchTerm = normalizeText(searchEl.value).toLowerCase();
+            applyDownloadFilters(items);
+          });
+        }
 
-        observeReveals();
+        applyDownloadFilters(items);
       } catch (err) {
         console.error(err);
         emptyEl.style.display = '';
@@ -1060,7 +1381,57 @@
     render();
   }
 
-  function initWelcome() {
+  function initSupport() {
+    const contributorsEl = document.getElementById('supportContributors');
+    if (!contributorsEl) return;
+
+    async function render() {
+      try {
+        const globalConfig = await loadGlobalConfig();
+        const contributorsConfig = globalConfig.support && globalConfig.support.contributors;
+        const contributors = Array.isArray(contributorsConfig && contributorsConfig.items)
+          ? contributorsConfig.items.slice(0, 3)
+          : [];
+
+        if (contributors.length === 0) {
+          contributorsEl.style.display = 'none';
+          return;
+        }
+
+        contributorsEl.style.display = '';
+        contributorsEl.innerHTML = `
+          <span class="support-contributors-title">${escapeHtml(normalizeText(contributorsConfig.title, 'Top Contributor'))}</span>
+          <div class="support-contributor-list">
+            ${contributors.map((person, index) => {
+              const name = normalizeText(person.name, 'Contributor');
+              const label = normalizeText(person.label, `#${index + 1}`);
+              const href = normalizeText(person.href || person.url);
+              const content = `
+                <span>${String(index + 1).padStart(2, '0')}</span>
+                <strong>${escapeHtml(name)}</strong>
+                <small>${escapeHtml(label)}</small>
+              `;
+              return href
+                ? `<a class="support-contributor" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${content}</a>`
+                : `<div class="support-contributor">${content}</div>`;
+            }).join('')}
+          </div>
+        `;
+      } catch (err) {
+        console.warn('Support contributors skipped:', err);
+        contributorsEl.style.display = 'none';
+      }
+    }
+
+    render();
+  }
+
+  function initWelcome(scope) {
+    const snapshotKickerEl = document.getElementById('welcomeSnapshotKicker');
+    const snapshotTitleEl = document.getElementById('welcomeSnapshotTitle');
+    const snapshotDescriptionEl = document.getElementById('welcomeSnapshotDescription');
+    const snapshotActionsEl = document.getElementById('welcomeSnapshotActions');
+    const previewEl = document.getElementById('welcomePreview');
     const toolsEl = document.getElementById('welcomeTools');
     const panelEl = document.getElementById('welcomePanel');
     const signalsEl = document.getElementById('welcomeSignals');
@@ -1074,6 +1445,99 @@
       try {
         const globalConfig = await loadGlobalConfig();
         const config = globalConfig.welcome || {};
+        const snapshot = config.snapshot || {};
+
+        if (snapshotKickerEl) {
+          snapshotKickerEl.textContent = normalizeText(snapshot.kicker, 'VRChat Creator / Unity / UdonSharp');
+        }
+
+        if (snapshotTitleEl) {
+          snapshotTitleEl.innerHTML = `${escapeHtml(normalizeText(snapshot.titlePrefix, 'Welcome to'))} <span class="gradient-text">${escapeHtml(normalizeText(snapshot.titleHighlight, "Dennifer's website"))}</span>.`;
+        }
+
+        if (snapshotDescriptionEl) {
+          snapshotDescriptionEl.textContent = normalizeText(snapshot.description, 'Using Unity for personal game projects and creating VRChat worlds from scratch, self-taught!');
+        }
+
+        if (snapshotActionsEl) {
+          const actions = Array.isArray(snapshot.actions) ? snapshot.actions : [
+            { label: 'View Portfolio', href: '#/portfolio', page: 'portfolio', primary: true },
+            { label: 'Commission Info', href: '#/commissions', page: 'commissions' }
+          ];
+          snapshotActionsEl.innerHTML = actions.map((action) => `
+            <a class="btn ${action.primary === false ? 'btn-ghost' : 'btn-primary'}" href="${escapeHtml(normalizeText(action.href, '#/portfolio'))}" data-page="${escapeHtml(normalizeText(action.page, 'portfolio'))}">
+              ${escapeHtml(normalizeText(action.label, 'View'))}
+            </a>
+          `).join('');
+        }
+
+        if (previewEl) {
+          const projectImages = (window.PROJECTS || [])
+            .flatMap((category) => category.projects || [])
+            .flatMap((project) => project.photos || []);
+          const availableImages = uniqueUrls(projectImages.map(encodeAssetPath));
+          const previewCount = Math.min(3, availableImages.length);
+
+          function pickPreviewSet(count, exclude = []) {
+            const selected = [];
+            const imagePool = availableImages.filter((src) => !exclude.includes(src));
+            while (selected.length < count && imagePool.length > 0) {
+              const index = Math.floor(Math.random() * imagePool.length);
+              selected.push(imagePool.splice(index, 1)[0]);
+            }
+            return selected;
+          }
+
+          const previewImages = pickPreviewSet(previewCount);
+
+          previewEl.innerHTML = previewImages.length > 0
+            ? `
+              <div class="welcome-preview-stack">
+                ${previewImages.map((src, index) => `
+                  <div class="welcome-preview-slot">
+                    <img class="active" src="${escapeHtml(src)}" alt="Welcome preview ${index + 1}" loading="eager" />
+                  </div>
+                `).join('')}
+              </div>
+            `
+            : '';
+
+          const previewSlots = [...previewEl.querySelectorAll('.welcome-preview-slot')];
+          if (previewSlots.length > 0 && availableImages.length > previewSlots.length) {
+            const intervalOwner = scope || { addInterval: window.setInterval.bind(window) };
+            intervalOwner.addInterval(() => {
+              const currentImages = previewSlots.map((slot) => {
+                const activeImage = slot.querySelector('img.active');
+                return activeImage ? activeImage.getAttribute('src') : '';
+              });
+
+              previewSlots.forEach((slot, imageIndex) => {
+                const currentImage = currentImages[imageIndex];
+                const otherImages = currentImages.filter((src, index) => index !== imageIndex && src);
+                const candidates = availableImages.filter((src) => !otherImages.includes(src) && src !== currentImage);
+                if (candidates.length === 0) return;
+                const nextSrc = candidates[Math.floor(Math.random() * candidates.length)];
+
+                const nextImage = document.createElement('img');
+                nextImage.src = nextSrc;
+                nextImage.alt = `Welcome preview ${imageIndex + 1}`;
+                nextImage.loading = 'eager';
+                slot.appendChild(nextImage);
+
+                window.requestAnimationFrame(() => {
+                  const previousImage = slot.querySelector('img.active');
+                  nextImage.classList.add('active');
+                  if (previousImage) previousImage.classList.remove('active');
+                  window.setTimeout(() => {
+                    [...slot.querySelectorAll('img:not(.active)')].forEach((img) => img.remove());
+                  }, 900);
+                });
+
+                currentImages[imageIndex] = nextSrc;
+              });
+            }, 5500);
+          }
+        }
 
         if (toolsEl) {
           const tools = Array.isArray(config.tools) ? config.tools : [];
@@ -1103,7 +1567,7 @@
           const makes = config.makes || {};
           makesHeadEl.innerHTML = `
             <p class="eyebrow">${escapeHtml(normalizeText(makes.eyebrow, 'What I Make'))}</p>
-            <h2>${escapeHtml(normalizeText(makes.title, 'Worlds, tools, interfaces, and experiments.'))}</h2>
+            <h2><span class="gradient-text">${escapeHtml(normalizeText(makes.title, 'Worlds, tools, interfaces, and experiments.'))}</span></h2>
             <p>${escapeHtml(normalizeText(makes.description, 'Things that feel useful, atmospheric, and personal.'))}</p>
           `;
         }
@@ -1130,7 +1594,7 @@
         }
 
         observeReveals();
-        schedulePageScrollCueUpdate();
+        wireNav();
       } catch (err) {
         console.warn('Welcome config skipped:', err);
       }
@@ -1161,12 +1625,14 @@
         const visibility = normalizeText(item.visibility);
         const description = normalizeText(item.description, 'A hand-picked stop from the archive.');
         const imageAlt = normalizeText(item.imageAlt, title);
-        const href = normalizeText(item.href, '#/portfolio');
         const page = normalizeText(item.page, 'portfolio');
         const cta = normalizeText(item.cta, 'View Feature');
         const projectMatch = (window.PROJECTS || [])
           .flatMap((category) => (category.projects || []).map((project) => ({ category, project })))
           .find((entry) => normalizeText(entry.project.name).replace(/_/g, ' ') === title);
+        const href = projectMatch && page === 'portfolio'
+          ? `#/portfolio?category=${encodeURIComponent(projectMatch.category.name)}&project=${encodeURIComponent(projectMatch.project.name)}`
+          : normalizeText(item.href, '#/portfolio');
         const projectPhotos = projectMatch ? projectMatch.project : null;
         let featuredMeta = {};
         if (projectMatch) {
@@ -1267,11 +1733,12 @@ async function loadView(name) {
       app.innerHTML = container.innerHTML;
 setActive(name);
       wireNav();
-      if (name === 'welcome') initWelcome();
+      if (name === 'welcome') initWelcome(scope);
       if (name === 'portfolio') initPortfolio(scope);
       if (name === 'vrchat') initVrchat(scope);
       if (name === 'downloads') initDownloads(scope);
       if (name === 'commissions') initCommissions(scope);
+      if (name === 'support') initSupport(scope);
       observeReveals();
       schedulePageScrollCueUpdate();
       // No subsection auto-scroll needed for standalone pages.
@@ -1284,7 +1751,7 @@ setActive(name);
   // Hash routing keeps the URL on index.html (the shell), so refreshing
   // always loads the full app and restores the same view seamlessly.
   function currentPageFromHash() {
-    const hash = location.hash.replace(/^#\/?/, '').toLowerCase();
+    const hash = parseHashRoute().page;
     if (hash === 'welcome' || hash === 'portfolio' || hash === 'vrchat' || hash === 'home' || hash === 'downloads' || hash === 'support' || hash === 'commissions') return hash;
     return 'home';
   }
@@ -1294,7 +1761,8 @@ setActive(name);
     e.preventDefault();
     if (mediaLoading) return;
     const page = link.dataset.page;
-    location.hash = '/' + page;
+    const href = link.getAttribute('href') || `#/${page}`;
+    location.hash = href.startsWith('#') ? href : `#/${page}`;
   }
 
   // Wire all nav links, including ones just injected into #app
