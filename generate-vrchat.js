@@ -55,11 +55,12 @@ function urlEncode(name) {
   return name.split(path.sep).map(encodeURIComponent).join('/');
 }
 
-function buildCategory(name, files) {
+function buildCategory(name, files, folderName = name) {
+  const prefix = folderName ? path.join(folderName) : '';
   return {
     name: name.replace(/\s+/g, '-').toLowerCase(),
     label: labelFor(name),
-    photos: files.map((file) => 'VRC_PHOTOS/' + urlEncode(path.join(name, file)))
+    photos: files.map((file) => 'VRC_PHOTOS/' + urlEncode(prefix ? path.join(prefix, file) : file))
   };
 }
 
@@ -76,7 +77,7 @@ function build() {
       .map((entry) => entry.name);
 
     if (rootFiles.length > 0) {
-      categories.push(buildCategory('Unsorted', rootFiles));
+      categories.push(buildCategory('Unsorted', rootFiles, ''));
     }
 
     const folders = entries
@@ -118,4 +119,8 @@ function build() {
   }
 }
 
-build();
+if (require.main === module) {
+  build();
+}
+
+module.exports = { build };

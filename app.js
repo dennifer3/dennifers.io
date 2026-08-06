@@ -47,6 +47,20 @@
   let viewCleanup = null;
   let mediaLoading = false;
   const loadedMediaSets = new Set();
+  const mediaGateLines = [
+    'Chasing loose pixels through the vents...',
+    'Convincing screenshots to stand still...',
+    'Scooping up shiny image fragments...',
+    'Asking the gallery to make an entrance...',
+    'Polishing tiny neon corners...',
+    'Catching runaway thumbnails...',
+    'Sorting vibes by file size...',
+    'Warming up the picture tubes...',
+    'Untangling a pocket dimension of PNGs...',
+    'Teaching the pixels their stage marks...',
+    'Dusting off the good screenshots...',
+    'Checking each image for dramatic timing...'
+  ];
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -117,6 +131,10 @@
     e.returnValue = '';
   });
 
+  function mediaGateLine(seed = 0) {
+    return mediaGateLines[Math.abs(seed) % mediaGateLines.length];
+  }
+
   function updateMediaGate({ title, detail, loaded, total, loadedBytes, totalBytes, measured }) {
     const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
     if (mediaGateKicker) mediaGateKicker.textContent = 'Fetching Media';
@@ -133,20 +151,31 @@
   }
 
   async function getMediaSize(url) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 3500);
     try {
-      const res = await fetch(url, { method: 'HEAD', cache: 'force-cache' });
+      const res = await fetch(url, { method: 'HEAD', cache: 'force-cache', signal: controller.signal });
       if (!res.ok) return 0;
       return Number(res.headers.get('content-length')) || 0;
     } catch (err) {
       return 0;
+    } finally {
+      window.clearTimeout(timeout);
     }
   }
 
   function preloadImage(url) {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
+      const timeout = window.setTimeout(() => resolve(false), 12000);
+      img.onload = () => {
+        window.clearTimeout(timeout);
+        resolve(true);
+      };
+      img.onerror = () => {
+        window.clearTimeout(timeout);
+        resolve(false);
+      };
       img.src = url;
     });
   }
@@ -185,7 +214,7 @@
     try {
       updateMediaGate({
         title: `Loading ${pageTitle}`,
-        detail: 'Measuring gallery media...',
+        detail: mediaGateLine(allUrls.length),
         loaded,
         total: allUrls.length,
         loadedBytes,
@@ -203,7 +232,7 @@
         await runLimited(group.urls, 6, async (url) => {
           updateMediaGate({
             title: `Loading ${pageTitle}`,
-            detail: `Fetching ${group.label} pictures...`,
+          detail: `${mediaGateLine(index + loaded)} ${group.label} is almost here.`,
             loaded,
             total: allUrls.length,
             loadedBytes,
@@ -215,7 +244,7 @@
           loadedBytes += sizeMap.get(url) || 0;
           updateMediaGate({
             title: `Loading ${pageTitle}`,
-            detail: `Fetching ${group.label} pictures...`,
+            detail: `${mediaGateLine(index + loaded)} ${group.label} is almost here.`,
             loaded,
             total: allUrls.length,
             loadedBytes,
@@ -250,7 +279,7 @@
   const PALETTE = ['#7f5af0', '#2cb67d', '#e58e27', '#4cc9f0', '#f72585', '#3a86ff', '#06d6a0', '#ff5e7d'];
   let allCategories = [];
 
-  async function initPortfolio(scope) {
+  function initPortfolio(scope) {
     const filtersEl = document.getElementById('filters');
     const gridEl = document.getElementById('portfolioGrid');
     const emptyEl = document.getElementById('emptyState');
@@ -437,11 +466,11 @@
     }
 
     if (window.PROJECTS && Array.isArray(window.PROJECTS)) {
-      await preloadMediaGroups(window.PROJECTS.map((category) => ({
+      render(window.PROJECTS);
+      preloadMediaGroups(window.PROJECTS.map((category) => ({
         label: category.label,
         urls: (category.projects || []).flatMap((project) => project.photos || [])
-      })), 'Portfolio', 'portfolio');
-      render(window.PROJECTS);
+      })), 'Portfolio', 'portfolio').catch((err) => console.warn('Portfolio media preload skipped:', err));
     } else {
       emptyEl.style.display = '';
       filtersEl.style.display = 'none';
@@ -453,7 +482,7 @@
   }
 
 // ---- VRChat photo gallery rendering logic ----
-  async function initVrchat(scope) {
+  function initVrchat(scope) {
     const filtersEl = document.getElementById('vrchatFilters');
     const gridEl = document.getElementById('vrchatGrid');
     const emptyEl = document.getElementById('vrchatEmpty');
@@ -680,15 +709,15 @@
       }
     });
 
-    await preloadMediaGroups(categories.map((category) => ({
-      label: category.label,
-      urls: category.photos
-    })), 'VRChat Photos', 'vrchat');
     renderFilters();
     renderGrid();
+    preloadMediaGroups(categories.map((category) => ({
+      label: category.label,
+      urls: category.photos
+    })), 'VRChat Photos', 'vrchat').catch((err) => console.warn('VRChat media preload skipped:', err));
   }
 
-  async function initCommissions(scope) {
+  function initCommissions(scope) {
     const gridEl = document.getElementById('commissionsGrid');
     const emptyEl = document.getElementById('commissionsEmpty');
 
@@ -706,11 +735,6 @@
           emptyEl.style.display = '';
           return;
         }
-
-        await preloadMediaGroups(items.map((item) => ({
-          label: normalizeText(item.category, 'Commission'),
-          urls: item.images || []
-        })), 'Commissions', 'commissions');
 
         emptyEl.style.display = 'none';
 
@@ -748,6 +772,10 @@
         });
 
         observeReveals();
+        preloadMediaGroups(items.map((item) => ({
+          label: normalizeText(item.category, 'Commission'),
+          urls: item.images || []
+        })), 'Commissions', 'commissions').catch((err) => console.warn('Commission media preload skipped:', err));
       } catch (err) {
         console.error(err);
         emptyEl.style.display = '';
@@ -881,10 +909,10 @@ async function loadView(name) {
       app.innerHTML = container.innerHTML;
 setActive(name);
       wireNav();
-      if (name === 'portfolio') await initPortfolio(scope);
-      if (name === 'vrchat') await initVrchat(scope);
+      if (name === 'portfolio') initPortfolio(scope);
+      if (name === 'vrchat') initVrchat(scope);
       if (name === 'downloads') initDownloads(scope);
-      if (name === 'commissions') await initCommissions(scope);
+      if (name === 'commissions') initCommissions(scope);
       observeReveals();
       // No subsection auto-scroll needed for standalone pages.
     } catch (e) {

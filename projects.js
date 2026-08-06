@@ -28,14 +28,14 @@ window.PROJECTS = [
       {
         "name": "Afterglow Woods",
         "photos": [
-          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-43-47.128_1920x1080.png",
-          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-43-56.344_1920x1080.png",
-          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-05.455_1920x1080.png",
-          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-10.657_1920x1080.png",
-          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-13.562_1920x1080.png",
-          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-24.802_1920x1080.png",
-          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-34.474_1920x1080.png",
-          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-44.467_1920x1080.png"
+          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-43-47.128_1920x1080_original.png",
+          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-43-56.344_1920x1080_original.png",
+          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-05.455_1920x1080_original.png",
+          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-10.657_1920x1080_original.png",
+          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-13.562_1920x1080_original.png",
+          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-24.802_1920x1080_original.png",
+          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-34.474_1920x1080_original.png",
+          "VRC_WORLDS/Afterglow%20Woods/VRChat_2026-08-05_20-44-44.467_1920x1080_original.png"
         ]
       },
       {
