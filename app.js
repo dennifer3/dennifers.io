@@ -51,6 +51,10 @@
   let viewCleanup = null;
   let mediaLoading = false;
   let siteBootDismissed = false;
+  let backgroundMediaStarted = false;
+  let backgroundMediaRunning = false;
+  const backgroundMediaQueue = [];
+  const backgroundMediaSeen = new Set();
   const loadedMediaSets = new Set();
   const MEDIA_CACHE_STORE_KEY = 'dennifer_media_cache_sets_v2';
   const MEDIA_CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 14;
@@ -229,6 +233,63 @@
       };
       img.src = url;
     });
+  }
+
+  function enqueueBackgroundMedia(urls) {
+    uniqueUrls(urls).forEach((url) => {
+      if (!url || backgroundMediaSeen.has(url)) return;
+      backgroundMediaSeen.add(url);
+      backgroundMediaQueue.push(url);
+    });
+    runBackgroundMediaQueue();
+  }
+
+  function runBackgroundMediaQueue() {
+    if (backgroundMediaRunning) return;
+    backgroundMediaRunning = true;
+
+    const runNext = async () => {
+      if (mediaLoading) {
+        window.setTimeout(runNext, 1200);
+        return;
+      }
+
+      const batch = backgroundMediaQueue.splice(0, 3);
+      if (batch.length === 0) {
+        backgroundMediaRunning = false;
+        return;
+      }
+
+      await Promise.all(batch.map(preloadImage));
+      const idle = window.requestIdleCallback || ((callback) => window.setTimeout(callback, 800));
+      idle(runNext, { timeout: 1600 });
+    };
+
+    runNext();
+  }
+
+  async function startBackgroundMediaWarmup() {
+    if (backgroundMediaStarted) return;
+    backgroundMediaStarted = true;
+
+    const portfolioUrls = (window.PROJECTS || [])
+      .flatMap((category) => category.projects || [])
+      .flatMap((project) => project.photos || []);
+    const vrchatUrls = (window.VRC_PHOTOS || [])
+      .flatMap((category) => category.photos || []);
+
+    enqueueBackgroundMedia([...portfolioUrls, ...vrchatUrls]);
+
+    try {
+      const res = await fetch('commissions.json', { cache: 'force-cache' });
+      if (!res.ok) return;
+      const commissions = await res.json();
+      if (Array.isArray(commissions)) {
+        enqueueBackgroundMedia(commissions.flatMap((item) => item.images || []));
+      }
+    } catch (err) {
+      /* background warming should never affect navigation */
+    }
   }
 
   function waitForImageElement(img) {
@@ -1831,6 +1892,7 @@ setActive(name);
   // Load the view based on the current hash, and on every hash change
   function route() {
     loadView(currentPageFromHash());
+    window.setTimeout(startBackgroundMediaWarmup, 1800);
   }
 
   window.addEventListener('hashchange', route);
