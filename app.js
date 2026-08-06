@@ -12,6 +12,7 @@
   window.__spaLive = true;
 
   const app = document.getElementById('app');
+  const siteBoot = document.getElementById('siteBoot');
   const mediaGate = document.getElementById('mediaGate');
   const mediaGateTitle = document.getElementById('mediaGateTitle');
   const mediaGateDetail = document.getElementById('mediaGateDetail');
@@ -49,6 +50,7 @@
   let revealObserver = null;
   let viewCleanup = null;
   let mediaLoading = false;
+  let siteBootDismissed = false;
   const loadedMediaSets = new Set();
   const MEDIA_CACHE_STORE_KEY = 'dennifer_media_cache_sets_v2';
   const MEDIA_CACHE_MAX_AGE = 1000 * 60 * 60 * 24 * 14;
@@ -227,6 +229,56 @@
       };
       img.src = url;
     });
+  }
+
+  function waitForImageElement(img) {
+    return new Promise((resolve) => {
+      if (!img) {
+        resolve(false);
+        return;
+      }
+      if (img.complete && img.naturalWidth > 0) {
+        resolve(true);
+        return;
+      }
+      const timeout = window.setTimeout(() => cleanup(false), 4200);
+      function cleanup(result) {
+        window.clearTimeout(timeout);
+        img.removeEventListener('load', onLoad);
+        img.removeEventListener('error', onError);
+        resolve(result);
+      }
+      function onLoad() {
+        cleanup(true);
+      }
+      function onError() {
+        cleanup(false);
+      }
+      img.addEventListener('load', onLoad, { once: true });
+      img.addEventListener('error', onError, { once: true });
+    });
+  }
+
+  async function dismissSiteBootWhenReady(name) {
+    if (!siteBoot || siteBootDismissed) return;
+    const selector = name === 'welcome'
+      ? '.welcome-preview-slot img.active'
+      : name === 'home'
+        ? '.featured-img.active'
+        : '';
+    const images = selector ? [...app.querySelectorAll(selector)].slice(0, 3) : [];
+    const waitForImages = Promise.all(images.map(waitForImageElement));
+    const minimumDelay = delay(900);
+    const maximumDelay = delay(4800);
+    await Promise.race([
+      Promise.all([waitForImages, minimumDelay]),
+      maximumDelay
+    ]);
+    siteBootDismissed = true;
+    siteBoot.classList.add('hidden');
+    window.setTimeout(() => {
+      siteBoot.style.display = 'none';
+    }, 500);
   }
 
   function delay(ms) {
@@ -1717,6 +1769,7 @@ async function loadView(name) {
       initFeatured(scope);
       observeReveals();
       schedulePageScrollCueUpdate();
+      dismissSiteBootWhenReady('home');
       return;
     }
 
@@ -1738,6 +1791,7 @@ setActive(name);
       if (name === 'support') initSupport(scope);
       observeReveals();
       schedulePageScrollCueUpdate();
+      dismissSiteBootWhenReady(name);
       // No subsection auto-scroll needed for standalone pages.
     } catch (e) {
       app.innerHTML = '<p style="text-align:center;padding:60px">Could not load page.</p>';

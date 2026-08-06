@@ -2870,6 +2870,114 @@ input:focus-visible {
   visibility: visible;
 }
 
+.site-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 25% 20%, rgba(127, 90, 240, 0.18), transparent 42%),
+    radial-gradient(circle at 78% 22%, rgba(44, 182, 125, 0.14), transparent 40%),
+    rgba(10, 10, 20, 0.94);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.45s ease, visibility 0.45s ease;
+}
+
+.site-boot.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.site-boot-panel {
+  width: min(420px, 100%);
+  padding: 30px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 18, 31, 0.86);
+  box-shadow: var(--shadow), 0 0 44px rgba(127, 90, 240, 0.18);
+  text-align: center;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.site-boot-orbit {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(127, 90, 240, 0.28);
+  animation: spin 1.4s linear infinite;
+}
+
+.site-boot-orbit::before,
+.site-boot-orbit::after,
+.site-boot-orbit span {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+}
+
+.site-boot-orbit::before {
+  inset: 15px;
+  border: 1px solid rgba(44, 182, 125, 0.34);
+}
+
+.site-boot-orbit::after {
+  top: -4px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: var(--primary-2);
+  box-shadow: 0 0 18px rgba(44, 182, 125, 0.9);
+}
+
+.site-boot-orbit span {
+  inset: 24px;
+  background: var(--grad);
+  box-shadow: 0 0 22px rgba(127, 90, 240, 0.58);
+}
+
+.site-boot-panel p {
+  color: var(--primary-2);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+}
+
+.site-boot-panel h2 {
+  margin-top: 8px;
+  font-family: var(--font-head);
+  font-size: 1.45rem;
+}
+
+.site-boot-bar {
+  height: 5px;
+  margin-top: 20px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.site-boot-bar span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--grad);
+  animation: siteBootBar 1.2s ease-in-out infinite;
+}
+
+@keyframes siteBootBar {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(260%); }
+}
+
 .media-gate-panel {
   width: min(460px, 100%);
   padding: 30px;
