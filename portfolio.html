@@ -1,0 +1,25 @@
+<!-- Portfolio partial — content only (loaded into #app by app.js) -->
+<script>
+  // If this file is opened/refreshed directly (not through the SPA),
+  // redirect to the app shell and restore the same view via the hash.
+  if (!window.__spaLive) { location.replace('index.html#/portfolio'); }
+</script>
+<section class="section portfolio-hero">
+  <div class="container">
+    <div class="section-head">
+      <h1><span class="gradient-text">Projects</span></h1>
+      <p>VRChat worlds, personal game projects and more!</p>
+    </div>
+
+    <!-- Filter buttons (auto-generated) -->
+    <div class="filters" id="filters"></div>
+
+    <!-- Projects grid (auto-generated) -->
+    <div class="portfolio-grid" id="portfolioGrid"></div>
+
+    <!-- Empty state when no projects exist -->
+    <div class="empty-state" id="emptyState" style="display:none">
+      <p>No projects found. Add a folder with images inside <code>VRC_WORLDS</code>.</p>
+    </div>
+  </div>
+</section>

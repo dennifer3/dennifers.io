@@ -1,0 +1,41 @@
+<!-- VRChat photo gallery partial — content only (loaded into #app by app.js) -->
+<script>
+  // If this file is opened/refreshed directly (not through the SPA),
+  // redirect to the app shell and restore the same view via the hash.
+  if (!window.__spaLive) { location.replace('index.html#/vrchat'); }
+</script>
+<section class="section vrchat-hero">
+  <div class="container">
+    <div class="section-head">
+      <h1><span class="gradient-text">VRChat Moments</span></h1>
+      <p>Photos from my worlds, hangouts and adventures in VRChat.</p>
+    </div>
+
+    <!-- Category filters (auto-generated) -->
+    <div class="filters" id="vrchatFilters"></div>
+
+    <!-- Photo grid (auto-generated) -->
+    <div class="vrchat-grid" id="vrchatGrid"></div>
+
+    <!-- Empty state when no photos exist -->
+    <div class="empty-state" id="vrchatEmpty" style="display:none">
+      <p>No photos yet. Add some images to the <code>VRC_PHOTOS</code> folder and run <code>node generate-vrchat.js</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- VRChat lightbox (uses the shared modal) -->
+<div class="modal" id="vrchatModal" aria-hidden="true">
+  <div class="modal-backdrop" id="vrchatModalBackdrop"></div>
+  <div class="modal-content">
+    <button class="modal-close" id="vrchatModalClose" aria-label="Close">✕</button>
+    <div class="modal-gallery">
+      <button class="gallery-nav prev" id="vrchatPrevBtn" aria-label="Previous photo">‹</button>
+      <div class="gallery-slide gallery-slide-fill" id="vrchatGallerySlide">
+        <img id="vrchatImg" src="" alt="VRChat photo" />
+      </div>
+      <button class="gallery-nav next" id="vrchatNextBtn" aria-label="Next photo">›</button>
+    </div>
+    <div class="gallery-counter" id="vrchatCounter"></div>
+  </div>
+</div>

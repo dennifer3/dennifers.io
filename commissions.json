@@ -1,0 +1,55 @@
+[
+  {
+    "id": "1_worlds",
+    "category": "Worlds",
+    "description": [
+      "I can build custom worlds for your universe! Unique environments, and immersive experiences. If you have an idea, I can create it for you!"
+    ],
+    "images": [
+      "COMMISIONINFO/1_worlds/images/1.5.png",
+      "COMMISIONINFO/1_worlds/images/1.png",
+      "COMMISIONINFO/1_worlds/images/2.5.png",
+      "COMMISIONINFO/1_worlds/images/2.png",
+      "COMMISIONINFO/1_worlds/images/3.1.png",
+      "COMMISIONINFO/1_worlds/images/3.png",
+      "COMMISIONINFO/1_worlds/images/4.1.png",
+      "COMMISIONINFO/1_worlds/images/4.png",
+      "COMMISIONINFO/1_worlds/images/5.png",
+      "COMMISIONINFO/1_worlds/images/6.png",
+      "COMMISIONINFO/1_worlds/images/bcx.png",
+      "COMMISIONINFO/1_worlds/images/gsd.png",
+      "COMMISIONINFO/1_worlds/images/hs.png"
+    ]
+  },
+  {
+    "id": "2_uiux",
+    "category": "UI/UX Design",
+    "description": [
+      "I can make UI/UX designs for your world! Custom menus, layouts",
+      " interactive elements, visual hierarchy, and intuitive navigation."
+    ],
+    "images": [
+      "COMMISIONINFO/2_uiux/images/VRChat_2026-08-05_20-07-17.561_1920x1080.png",
+      "COMMISIONINFO/2_uiux/images/VRChat_2026-08-05_20-07-31.324_1920x1080.png",
+      "COMMISIONINFO/2_uiux/images/VRChat_2026-08-05_20-07-43.570_1920x1080.png",
+      "COMMISIONINFO/2_uiux/images/VRChat_2026-08-05_20-22-32.482_1920x1080.png"
+    ]
+  },
+  {
+    "id": "3_features",
+    "category": "Features",
+    "description": [
+      "I can build custom features for your world! Advanced movement",
+      " teleportation, interactive systems, managers, toggles, visual effects",
+      " gameplay mechanics, QOL improvements, and much more!"
+    ],
+    "images": [
+      "COMMISIONINFO/3_features/images/VRChat_2026-08-05_20-08-00.713_1920x1080.png",
+      "COMMISIONINFO/3_features/images/VRChat_2026-08-05_20-08-57.538_1920x1080.png",
+      "COMMISIONINFO/3_features/images/VRChat_2026-08-05_20-09-28.172_1920x1080.png",
+      "COMMISIONINFO/3_features/images/VRChat_2026-08-05_20-22-32.482_1920x1080.png",
+      "COMMISIONINFO/3_features/images/VRChat_2026-08-05_20-22-58.766_1920x1080.png",
+      "COMMISIONINFO/3_features/images/VRChat_2026-08-05_20-23-30.532_1920x1080.png"
+    ]
+  }
+]

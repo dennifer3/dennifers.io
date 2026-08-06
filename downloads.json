@@ -1,0 +1,16 @@
+[
+  {
+    "id": "VRCW_MovementSpeed",
+    "title": "VRChat Movement Mod w/ Menu",
+    "version": "1.0.0",
+    "description": "Prefab & Scripts for modifying player movement. Gravity, Jump Power, Run Speed and more!",
+    "tags": [
+      "Archive"
+    ],
+    "fileSize": "20 KB",
+    "zipFile": "DensMovementMods.zip",
+    "zipUrl": "DOWNLOADS/VRCW_MovementSpeed/DensMovementMods.zip",
+    "thumbnail": "DOWNLOADS/downloadicon.png",
+    "folder": "VRCW_MovementSpeed"
+  }
+]

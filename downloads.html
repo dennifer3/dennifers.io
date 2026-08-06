@@ -1,0 +1,20 @@
+<!-- Downloads partial — content only (loaded into #app by app.js) -->
+<script>
+	// If this file is opened/refreshed directly (not through the SPA),
+	// redirect to the app shell and restore the same view via the hash.
+	if (!window.__spaLive) { location.replace('index.html#/downloads'); }
+</script>
+<section class="section downloads-hero">
+	<div class="container">
+		<div class="section-head">
+      <h1><span class="gradient-text">Downloads</span></h1>
+			<p class="section-sub">Browse & download my latest VRChat assets, tools, and game builds for free!</p>
+		</div>
+
+		<div class="downloads-grid" id="downloadsGrid"></div>
+
+		<div class="empty-state" id="downloadsEmpty" style="display:none">
+			<p>No download folders were found. Add a folder inside <code>DOWNLOADS</code> with a <code>metadata.json</code> file and a ZIP archive to populate this page.</p>
+		</div>
+	</div>
+</section>

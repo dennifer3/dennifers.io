@@ -1,0 +1,20 @@
+<!-- Commissions partial — content only (loaded into #app by app.js) -->
+<script>
+  // If this file is opened/refreshed directly (not through the SPA),
+  // redirect to the app shell and restore the same view via the hash.
+  if (!window.__spaLive) { location.replace('index.html#/commissions'); }
+</script>
+<section class="section commissions-hero">
+  <div class="container">
+    <div class="section-head">
+      <h1><span class="gradient-text">Commissions</span></h1>
+      <p class="section-sub">Unity, C#, VRChat world editing, optimization, UdonSharp, and more.</p>
+    </div>
+
+    <div class="commissions-grid" id="commissionsGrid"></div>
+
+    <div class="empty-state" id="commissionsEmpty" style="display:none">
+      <p>No commission categories found yet. Add a folder inside <code>COMMISIONINFO</code> with a <code>metadata.json</code> file and an <code>images</code> folder.</p>
+    </div>
+  </div>
+</section>
