@@ -29,10 +29,14 @@ const path = require('path');
 
 const ROOT = __dirname;
 const OUTPUT = path.join(ROOT, 'projects.js');
+const VIDEOS_OUTPUT = path.join(ROOT, 'videos.json');
 
 // Supported image extensions (case-insensitive)
 const IMAGE_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.avif'
+]);
+const VIDEO_EXTS = new Set([
+  '.mp4', '.webm', '.mov', '.m4v'
 ]);
 // Ignore non-portfolio content folders so they do not appear in portfolio.
 const EXCLUDE_CATEGORIES = new Set([
@@ -40,6 +44,7 @@ const EXCLUDE_CATEGORIES = new Set([
   'DOWNLOADS',
   'SUPPORT_PHOTOS',
   'VRC_PHOTOS',
+  'VIDEOS',
   'RESOURCES',
   'CONFIG',
   'tests'
@@ -55,6 +60,10 @@ function isImage(file) {
   return IMAGE_EXTS.has(path.extname(file).toLowerCase());
 }
 
+function isVideo(file) {
+  return VIDEO_EXTS.has(path.extname(file).toLowerCase());
+}
+
 function urlEncode(name) {
   // Encode for safe use in a URL while keeping slashes
   return name.split(path.sep).map(encodeURIComponent).join('/');
@@ -62,6 +71,86 @@ function urlEncode(name) {
 
 function labelFor(folderName) {
   return CATEGORY_LABELS[folderName] || folderName.replace(/_/g, ' ');
+}
+
+function readJsonIfPresent(filePath, label) {
+  if (!fs.existsSync(filePath)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (err) {
+    console.warn(`Skipping invalid metadata for ${label}:`, err.message);
+    return {};
+  }
+}
+
+function normalizeTags(tags, fallback = ['Clip']) {
+  if (Array.isArray(tags)) {
+    return tags.map((tag) => String(tag).trim()).filter(Boolean);
+  }
+  if (typeof tags === 'string') {
+    return tags.split(',').map((tag) => tag.trim()).filter(Boolean);
+  }
+  return fallback;
+}
+
+function titleFromName(name) {
+  return path.parse(name).name.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildVideosData() {
+  const videosDir = path.join(ROOT, 'VIDEOS');
+  if (!fs.existsSync(videosDir)) {
+    fs.writeFileSync(VIDEOS_OUTPUT, JSON.stringify([], null, 2), 'utf8');
+    console.log(`✅ Generated ${VIDEOS_OUTPUT}`);
+    return [];
+  }
+
+  const items = [];
+  const entries = fs.readdirSync(videosDir, { withFileTypes: true })
+    .filter((entry) => !entry.name.startsWith('.'))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const folderPath = path.join(videosDir, entry.name);
+      const metadata = readJsonIfPresent(path.join(folderPath, 'metadata.json'), entry.name);
+      const files = fs.readdirSync(folderPath)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const requestedVideo = typeof metadata.video === 'string' ? metadata.video : '';
+      const videoFile = requestedVideo && files.includes(requestedVideo)
+        ? requestedVideo
+        : files.find(isVideo);
+
+      if (!videoFile) continue;
+
+      items.push({
+        id: entry.name,
+        title: metadata.title || titleFromName(entry.name),
+        description: metadata.description || 'A short clip from the archive.',
+        tags: normalizeTags(metadata.tags),
+        duration: metadata.duration || '',
+        videoUrl: urlEncode(path.join('VIDEOS', entry.name, videoFile)),
+        folder: entry.name
+      });
+      continue;
+    }
+
+    if (entry.isFile() && isVideo(entry.name)) {
+      items.push({
+        id: path.parse(entry.name).name,
+        title: titleFromName(entry.name),
+        description: 'A short clip from the archive.',
+        tags: ['Clip'],
+        duration: '',
+        videoUrl: urlEncode(path.join('VIDEOS', entry.name)),
+        folder: ''
+      });
+    }
+  }
+
+  fs.writeFileSync(VIDEOS_OUTPUT, JSON.stringify(items, null, 2), 'utf8');
+  console.log(`✅ Generated ${VIDEOS_OUTPUT}`);
+  return items;
 }
 
 function buildCommissionsData() {
@@ -176,6 +265,7 @@ function build() {
 
   fs.writeFileSync(OUTPUT, jsContent, 'utf8');
   buildCommissionsData();
+  buildVideosData();
   console.log(`✅ Generated ${OUTPUT}`);
   console.log(`   ${categories.length} category/categories:`);
   categories.forEach((c) => {
@@ -188,4 +278,4 @@ if (require.main === module) {
   build();
 }
 
-module.exports = { build, buildCommissionsData };
+module.exports = { build, buildCommissionsData, buildVideosData };

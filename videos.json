@@ -1,0 +1,24 @@
+[
+  {
+    "id": "clip1",
+    "title": "Don't you just...",
+    "description": "love surprises?",
+    "tags": [
+      "Overwatch"
+    ],
+    "duration": "",
+    "videoUrl": "VIDEOS/clip1/overwatch.mp4",
+    "folder": "clip1"
+  },
+  {
+    "id": "clip2",
+    "title": "I'm here to collect.",
+    "description": "A short clip from the archive.",
+    "tags": [
+      "Overwatch"
+    ],
+    "duration": "",
+    "videoUrl": "VIDEOS/clip2/overwatch.mp4",
+    "folder": "clip2"
+  }
+]

@@ -22,6 +22,7 @@ const START_VOLUME = 10;        // 10% volume on load
   let player = null;
   let isPlaying = false;
   let timeTimer = null;
+  let forceMutedForVideo = false;
 
   // --- DOM refs ---
   const playerEl = document.getElementById('musicPlayer');
@@ -187,14 +188,36 @@ const START_VOLUME = 10;        // 10% volume on load
     });
   }
 
+  function applyEffectiveVolume() {
+    const sliderVolume = parseInt(volumeSlider ? volumeSlider.value : initialVolume, 10);
+    const safeVolume = Number.isFinite(sliderVolume) ? sliderVolume : START_VOLUME;
+    if (!player) return;
+    try {
+      if (forceMutedForVideo) {
+        player.mute();
+        player.setVolume(0);
+      } else {
+        player.unMute();
+        player.setVolume(safeVolume);
+      }
+    } catch (e) {
+      /* YouTube player may not be ready yet */
+    }
+  }
+
 // --- Volume ---
   function setVolume(v) {
-    if (player) player.setVolume(v);
     if (volumeSlider) {
       volumeSlider.value = v;
       volumeSlider.style.setProperty('--mp-volume-level', `${v}%`);
     }
     if (volumeLabel) volumeLabel.textContent = v + '%';
+    applyEffectiveVolume();
+  }
+
+  function setVideoAudioMuted(active) {
+    forceMutedForVideo = Boolean(active);
+    applyEffectiveVolume();
   }
 
   // Restore volume + position from saved state, or default
@@ -212,6 +235,14 @@ const START_VOLUME = 10;        // 10% volume on load
       setVolume(parseInt(volumeSlider.value, 10));
     });
   }
+
+  window.DenniferMusicPlayer = Object.assign(window.DenniferMusicPlayer || {}, {
+    setVideoAudioMuted
+  });
+
+  window.addEventListener('dennifer:video-player-active', (event) => {
+    setVideoAudioMuted(Boolean(event.detail && event.detail.active));
+  });
 
 // Periodically save the current playback position + volume
   function saveState() {
@@ -262,6 +293,7 @@ events: {
         onReady: (e) => {
           // Restore saved volume, or use the default
           setVolume(initialVolume);
+          applyEffectiveVolume();
           updateTrackTitle();
           window.setTimeout(updateTrackTitle, 800);
           window.setTimeout(updateTrackTitle, 1800);

@@ -22,6 +22,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const ROOT = __dirname;
 const DOWNLOADS_DIR = path.join(ROOT, 'DOWNLOADS');
 const COMMISSIONS_DIR = path.join(ROOT, 'COMMISIONINFO');
+const VIDEOS_DIR = path.join(ROOT, 'VIDEOS');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -36,6 +37,10 @@ const MIME = {
   '.bmp': 'image/bmp',
   '.svg': 'image/svg+xml',
   '.avif': 'image/avif',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.m4v': 'video/mp4',
   '.ico': 'image/x-icon'
 };
 
@@ -50,6 +55,7 @@ const EXCLUDE_PROJECT_CATEGORIES = new Set([
   'DOWNLOADS',
   'SUPPORT_PHOTOS',
   'VRC_PHOTOS',
+  'VIDEOS',
   'RESOURCES',
   'CONFIG',
   'tests'
@@ -251,6 +257,71 @@ function buildDownloads() {
     });
 }
 
+function buildVideos() {
+  if (!fs.existsSync(VIDEOS_DIR)) return [];
+
+  const VIDEO_EXTS = new Set(['.mp4', '.webm', '.mov', '.m4v']);
+  const isVideo = (f) => VIDEO_EXTS.has(path.extname(f).toLowerCase());
+  const urlEncode = (name) => name.split(path.sep).map(encodeURIComponent).join('/');
+  const titleFromName = (name) => path.parse(name).name.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalizeTags = (tags, fallback = ['Clip']) => {
+    if (Array.isArray(tags)) return tags.map((tag) => String(tag).trim()).filter(Boolean);
+    if (typeof tags === 'string') return tags.split(',').map((tag) => tag.trim()).filter(Boolean);
+    return fallback;
+  };
+
+  return fs.readdirSync(VIDEOS_DIR, { withFileTypes: true })
+    .filter((entry) => !entry.name.startsWith('.'))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+    .flatMap((entry) => {
+      if (entry.isDirectory()) {
+        const dirPath = path.join(VIDEOS_DIR, entry.name);
+        const metadataPath = path.join(dirPath, 'metadata.json');
+        let metadata = {};
+
+        if (fs.existsSync(metadataPath)) {
+          try {
+            metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+          } catch (err) {
+            console.warn(`Could not parse video metadata for ${entry.name}:`, err.message);
+          }
+        }
+
+        const files = fs.readdirSync(dirPath)
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        const requestedVideo = typeof metadata.video === 'string' ? metadata.video : '';
+        const videoFile = requestedVideo && files.includes(requestedVideo)
+          ? requestedVideo
+          : files.find(isVideo);
+        if (!videoFile) return [];
+
+        return [{
+          id: entry.name,
+          title: metadata.title || titleFromName(entry.name),
+          description: metadata.description || 'A short clip from the archive.',
+          tags: normalizeTags(metadata.tags),
+          duration: metadata.duration || '',
+          videoUrl: urlEncode(path.join('VIDEOS', entry.name, videoFile)),
+          folder: entry.name
+        }];
+      }
+
+      if (entry.isFile() && isVideo(entry.name)) {
+        return [{
+          id: path.parse(entry.name).name,
+          title: titleFromName(entry.name),
+          description: 'A short clip from the archive.',
+          tags: ['Clip'],
+          duration: '',
+          videoUrl: urlEncode(path.join('VIDEOS', entry.name)),
+          folder: ''
+        }];
+      }
+
+      return [];
+    });
+}
+
 const server = http.createServer((req, res) => {
   // Resolve requested path safely
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
@@ -289,6 +360,21 @@ const server = http.createServer((req, res) => {
       return;
     } catch (err) {
       console.error('Failed to regenerate commissions.json:', err.message);
+      res.writeHead(500);
+      res.end('Server Error');
+      return;
+    }
+  }
+
+  if (urlPath === '/videos.json') {
+    try {
+      const data = buildVideos();
+      fs.writeFileSync(path.join(ROOT, 'videos.json'), JSON.stringify(data, null, 2), 'utf8');
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(data));
+      return;
+    } catch (err) {
+      console.error('Failed to regenerate videos.json:', err.message);
       res.writeHead(500);
       res.end('Server Error');
       return;
@@ -342,4 +428,4 @@ if (require.main === module) {
   listen(PORT);
 }
 
-module.exports = { buildDownloads, buildCommissions, buildProjects };
+module.exports = { buildDownloads, buildCommissions, buildProjects, buildVideos };

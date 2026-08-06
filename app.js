@@ -30,6 +30,7 @@
     welcome: 'welcome.html',
     portfolio: 'portfolio.html',
     vrchat: 'vrchat.html',
+    videos: 'videos.html',
     downloads: 'downloads.html',
     support: 'donatesupport.html',
     commissions: 'commissions.html'
@@ -41,6 +42,7 @@
     welcome: 'Dennifer · Welcome',
     portfolio: 'Dennifer · Portfolio',
     vrchat: 'Dennifer · VRChat Gallery',
+    videos: 'Dennifer · Videos',
     downloads: 'Dennifer · Downloads',
     support: 'Dennifer · Support',
     commissions: 'Dennifer · Commissions'
@@ -1472,6 +1474,257 @@
     render();
   }
 
+  function initVideos(scope) {
+    const gridEl = document.getElementById('videosGrid');
+    const emptyEl = document.getElementById('videosEmpty');
+    const toolbarEl = document.getElementById('videosToolbar');
+    const filtersEl = document.getElementById('videosFilters');
+    const searchEl = document.getElementById('videosSearch');
+    const countEl = document.getElementById('videosCount');
+    const countLabelEl = document.getElementById('videosCountLabel');
+    const modal = document.getElementById('videoModal');
+    const modalBackdrop = document.getElementById('videoModalBackdrop');
+    const modalClose = document.getElementById('videoModalClose');
+    const player = document.getElementById('videoPlayer');
+    const playerTitle = document.getElementById('videoPlayerTitle');
+    const playerDescription = document.getElementById('videoPlayerDescription');
+    const playerToggle = document.getElementById('videoPlayerToggle');
+    const playerSeek = document.getElementById('videoPlayerSeek');
+    const playerCurrent = document.getElementById('videoPlayerCurrent');
+    const playerDuration = document.getElementById('videoPlayerDuration');
+    const playerDownload = document.getElementById('videoPlayerDownload');
+    const playerOpen = document.getElementById('videoPlayerOpen');
+
+    if (!gridEl) return;
+
+    let activeFilter = 'all';
+    let searchTerm = '';
+    let visibleItems = [];
+    let isSeeking = false;
+
+    function formatVideoTime(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+      const total = Math.floor(seconds);
+      const minutes = Math.floor(total / 60);
+      const secs = total % 60;
+      return `${minutes}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function syncPlayerUi() {
+      if (!player || !playerSeek) return;
+      const duration = Number.isFinite(player.duration) ? player.duration : 0;
+      const current = Number.isFinite(player.currentTime) ? player.currentTime : 0;
+      playerSeek.max = duration > 0 ? String(duration) : '100';
+      if (!isSeeking) playerSeek.value = duration > 0 ? String(current) : '0';
+      if (playerCurrent) playerCurrent.textContent = formatVideoTime(current);
+      if (playerDuration) playerDuration.textContent = formatVideoTime(duration);
+      if (playerToggle) playerToggle.textContent = player.paused ? '▶' : 'Ⅱ';
+      if (playerToggle) playerToggle.setAttribute('aria-label', player.paused ? 'Play video' : 'Pause video');
+    }
+
+    function closeVideoModal() {
+      if (!modal || !player) return;
+      player.pause();
+      player.removeAttribute('src');
+      player.load();
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      window.dispatchEvent(new CustomEvent('dennifer:video-player-active', { detail: { active: false } }));
+      syncPlayerUi();
+    }
+
+    function openVideoModal(item) {
+      if (!modal || !player) return;
+      const title = normalizeText(item.title, 'Video Clip');
+      const description = normalizeText(item.description, 'A short clip from the archive.');
+      const videoUrl = normalizeText(item.videoUrl, '#');
+
+      player.pause();
+      player.src = videoUrl;
+      player.load();
+      if (playerTitle) playerTitle.textContent = title;
+      if (playerDescription) playerDescription.textContent = description;
+      if (playerDownload) {
+        playerDownload.href = videoUrl;
+        playerDownload.download = videoUrl.split('/').pop() || `${title}.mp4`;
+      }
+      if (playerOpen) playerOpen.href = videoUrl;
+
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      window.dispatchEvent(new CustomEvent('dennifer:video-player-active', { detail: { active: true } }));
+      syncPlayerUi();
+      player.play().catch(() => syncPlayerUi());
+    }
+
+    scope.addCleanup(closeVideoModal);
+    scope.addEvent(modalBackdrop, 'click', closeVideoModal);
+    scope.addEvent(modalClose, 'click', closeVideoModal);
+    scope.addEvent(document, 'keydown', (e) => {
+      if (e.key === 'Escape') closeVideoModal();
+    });
+    scope.addEvent(player, 'loadedmetadata', syncPlayerUi);
+    scope.addEvent(player, 'timeupdate', syncPlayerUi);
+    scope.addEvent(player, 'play', syncPlayerUi);
+    scope.addEvent(player, 'pause', syncPlayerUi);
+    scope.addEvent(playerToggle, 'click', () => {
+      if (!player) return;
+      if (player.paused) {
+        player.play().catch(() => syncPlayerUi());
+      } else {
+        player.pause();
+      }
+      syncPlayerUi();
+    });
+    scope.addEvent(playerSeek, 'input', () => {
+      if (!player || !playerSeek) return;
+      isSeeking = true;
+      if (Number.isFinite(player.duration)) {
+        player.currentTime = Number(playerSeek.value);
+      }
+      syncPlayerUi();
+    });
+    scope.addEvent(playerSeek, 'change', () => {
+      isSeeking = false;
+      syncPlayerUi();
+    });
+
+    function videoTags(item) {
+      const tags = Array.isArray(item.tags) ? item.tags : [];
+      return tags.map((tag) => normalizeText(tag)).filter(Boolean);
+    }
+
+    function videoSearchText(item) {
+      return [
+        item.title,
+        item.description,
+        item.duration,
+        ...videoTags(item)
+      ].map((value) => normalizeText(value).toLowerCase()).join(' ');
+    }
+
+    function renderCards(items) {
+      visibleItems = items;
+      gridEl.innerHTML = '';
+      items.forEach((item, index) => {
+        const title = normalizeText(item.title, 'Video Clip');
+        const description = normalizeText(item.description, 'A short clip from the archive.');
+        const videoUrl = normalizeText(item.videoUrl, '#');
+        const duration = normalizeText(item.duration);
+        const tags = videoTags(item);
+        const card = document.createElement('article');
+        card.className = 'video-card reveal';
+        card.innerHTML = `
+          <button class="video-preview-button" type="button" data-index="${index}" aria-label="Play ${escapeHtml(title)}">
+            <span class="video-frame">
+              <video muted preload="metadata" playsinline aria-hidden="true">
+                <source src="${escapeHtml(videoUrl)}">
+              </video>
+              <span class="video-play-badge" aria-hidden="true">▶</span>
+            </span>
+          </button>
+          <div class="video-card-body">
+            <div class="video-card-head">
+              <div>
+                <h3>${escapeHtml(title)}</h3>
+                <div class="video-meta">
+                  ${duration ? `<span class="download-size">${escapeHtml(duration)}</span>` : ''}
+                  ${tags.slice(0, 2).map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+              </div>
+              <button class="video-open" type="button" data-index="${index}">Watch</button>
+            </div>
+            <p>${escapeHtml(description)}</p>
+            ${tags.length > 2 ? `<div class="download-tags">${tags.slice(2).map((tag) => `<span class="download-tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+          </div>
+        `;
+        gridEl.appendChild(card);
+      });
+      gridEl.querySelectorAll('[data-index]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const item = visibleItems[Number(button.dataset.index)];
+          if (item) openVideoModal(item);
+        });
+      });
+      observeReveals();
+      schedulePageScrollCueUpdate();
+    }
+
+    function applyVideoFilters(items) {
+      const filtered = items.filter((item) => {
+        const tags = videoTags(item).map((tag) => tag.toLowerCase());
+        const tagMatches = activeFilter === 'all' || tags.includes(activeFilter);
+        const searchMatches = !searchTerm || videoSearchText(item).includes(searchTerm);
+        return tagMatches && searchMatches;
+      });
+
+      renderCards(filtered);
+      emptyEl.style.display = filtered.length > 0 ? 'none' : '';
+      const emptyText = emptyEl.querySelector('p');
+      if (emptyText && filtered.length === 0) {
+        emptyText.textContent = 'No videos match that filter or search.';
+      }
+    }
+
+    async function render() {
+      try {
+        const res = await fetch('videos.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Unable to load video data');
+        const items = await res.json();
+
+        if (!Array.isArray(items) || items.length === 0) {
+          if (countEl) countEl.textContent = '0';
+          if (countLabelEl) countLabelEl.textContent = 'Clips';
+          emptyEl.style.display = '';
+          return;
+        }
+
+        if (countEl) countEl.textContent = String(items.length);
+        if (countLabelEl) countLabelEl.textContent = items.length === 1 ? 'Clip' : 'Clips';
+        emptyEl.style.display = 'none';
+
+        const tagLabels = uniqueUrls(items.flatMap(videoTags));
+        const filterTags = ['all', ...tagLabels.map((tag) => tag.toLowerCase())];
+        if (toolbarEl && filtersEl && searchEl) {
+          toolbarEl.style.display = '';
+          filtersEl.innerHTML = filterTags.map((tag) => {
+            const label = tag === 'all'
+              ? 'All'
+              : tagLabels.find((candidate) => candidate.toLowerCase() === tag) || tag;
+            return `
+              <button class="download-filter${tag === activeFilter ? ' active' : ''}" type="button" data-filter="${escapeHtml(tag)}">
+                ${escapeHtml(label)}
+              </button>
+            `;
+          }).join('');
+
+          filtersEl.querySelectorAll('.download-filter').forEach((button) => {
+            button.addEventListener('click', () => {
+              activeFilter = button.dataset.filter || 'all';
+              filtersEl.querySelectorAll('.download-filter').forEach((filter) => filter.classList.toggle('active', filter === button));
+              applyVideoFilters(items);
+            });
+          });
+
+          searchEl.addEventListener('input', () => {
+            searchTerm = normalizeText(searchEl.value).toLowerCase();
+            applyVideoFilters(items);
+          });
+        }
+
+        applyVideoFilters(items);
+      } catch (err) {
+        console.error(err);
+        emptyEl.style.display = '';
+        emptyEl.querySelector('p').textContent = 'The video archive could not be loaded right now.';
+      }
+    }
+
+    render();
+  }
+
   function initSupport() {
     const contributorsEl = document.getElementById('supportContributors');
     if (!contributorsEl) return;
@@ -1847,6 +2100,7 @@ setActive(name);
       if (name === 'welcome') initWelcome(scope);
       if (name === 'portfolio') initPortfolio(scope);
       if (name === 'vrchat') initVrchat(scope);
+      if (name === 'videos') initVideos(scope);
       if (name === 'downloads') initDownloads(scope);
       if (name === 'commissions') initCommissions(scope);
       if (name === 'support') initSupport(scope);
@@ -1864,7 +2118,7 @@ setActive(name);
   // always loads the full app and restores the same view seamlessly.
   function currentPageFromHash() {
     const hash = parseHashRoute().page;
-    if (hash === 'welcome' || hash === 'portfolio' || hash === 'vrchat' || hash === 'home' || hash === 'downloads' || hash === 'support' || hash === 'commissions') return hash;
+    if (hash === 'welcome' || hash === 'portfolio' || hash === 'vrchat' || hash === 'videos' || hash === 'home' || hash === 'downloads' || hash === 'support' || hash === 'commissions') return hash;
     return 'home';
   }
 
