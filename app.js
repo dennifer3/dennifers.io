@@ -257,13 +257,12 @@
     const cachedAt = Number(cache[cacheKey]) || 0;
     if (!cachedAt) return false;
     if (Date.now() - cachedAt > MEDIA_CACHE_MAX_AGE) return false;
-    loadedMediaSets.add(cacheKey);
     return true;
   }
 
   async function imageLooksCached(url) {
-    if (performance && typeof performance.getEntriesByName === 'function') {
-      const entries = performance.getEntriesByName(url);
+    if (window.performance && typeof window.performance.getEntriesByName === 'function') {
+      const entries = window.performance.getEntriesByName(url);
       if (entries.some((entry) => entry.initiatorType === 'img' && entry.transferSize === 0 && entry.decodedBodySize > 0)) {
         return true;
       }
@@ -274,6 +273,15 @@
     if (img.complete && img.naturalWidth > 0) return true;
 
     return false;
+  }
+
+  function mediaProbeSample(urls, sampleSize = 18) {
+    if (urls.length <= sampleSize) return urls;
+    const lastIndex = urls.length - 1;
+    return Array.from({ length: sampleSize }, (_, index) => {
+      const urlIndex = Math.round((index / (sampleSize - 1)) * lastIndex);
+      return urls[urlIndex];
+    });
   }
 
   async function runLimited(items, limit, worker) {
@@ -300,14 +308,14 @@
     if (allUrls.length === 0) return;
     const stableCacheKey = `${cacheKey}:${allUrls.join('|')}`;
     if (loadedMediaSets.has(stableCacheKey)) return;
-    if (isRememberedMediaCache(stableCacheKey)) return;
+    const rememberedCache = isRememberedMediaCache(stableCacheKey);
 
-    const cacheProbeSample = allUrls.slice(0, Math.min(allUrls.length, 18));
+    const cacheProbeSample = mediaProbeSample(allUrls);
     const cachedProbe = await Promise.all(cacheProbeSample.map(imageLooksCached));
     const cachedProbeCount = cachedProbe.filter(Boolean).length;
     if (cachedProbeSample.length > 0 && cachedProbeCount === cacheProbeSample.length) {
       loadedMediaSets.add(stableCacheKey);
-      rememberMediaCache(stableCacheKey);
+      if (!rememberedCache) rememberMediaCache(stableCacheKey);
       return;
     }
 
