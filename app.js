@@ -1496,20 +1496,22 @@
                 if (candidates.length === 0) return;
                 const nextSrc = candidates[Math.floor(Math.random() * candidates.length)];
 
-                const nextImage = document.createElement('img');
-                nextImage.src = nextSrc;
+                const nextImage = new Image();
                 nextImage.alt = `Welcome preview ${imageIndex + 1}`;
                 nextImage.loading = 'eager';
-                slot.appendChild(nextImage);
-
-                window.requestAnimationFrame(() => {
-                  const previousImage = slot.querySelector('img.active');
-                  nextImage.classList.add('active');
-                  if (previousImage) previousImage.classList.remove('active');
-                  window.setTimeout(() => {
-                    [...slot.querySelectorAll('img:not(.active)')].forEach((img) => img.remove());
-                  }, 900);
-                });
+                nextImage.onload = () => {
+                  if (!previewEl.isConnected) return;
+                  slot.appendChild(nextImage);
+                  window.requestAnimationFrame(() => {
+                    const previousImage = slot.querySelector('img.active');
+                    nextImage.classList.add('active');
+                    if (previousImage) previousImage.classList.remove('active');
+                    window.setTimeout(() => {
+                      [...slot.querySelectorAll('img:not(.active)')].forEach((img) => img.remove());
+                    }, 900);
+                  });
+                };
+                nextImage.src = nextSrc;
 
                 currentImages[imageIndex] = nextSrc;
               });
@@ -1622,9 +1624,7 @@
           ? `<a href="${escapeHtml(vrcUrl)}" class="featured-link featured-vrc-link" target="_blank" rel="noopener noreferrer">VRC Link</a>`
           : '';
         const photos = uniqueUrls(projectPhotos && Array.isArray(projectPhotos.photos) ? projectPhotos.photos : [image]);
-        const slides = photos.map((src, index) => `
-          <img class="featured-img${index === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(imageAlt)}" loading="eager" />
-        `).join('');
+        const firstPhoto = photos[0] || image;
 
         host.innerHTML = `
           <div class="featured-head">
@@ -1633,7 +1633,7 @@
           </div>
           <article class="featured-card">
             <a href="${escapeHtml(href)}" data-page="${escapeHtml(page)}" class="featured-media" aria-label="${escapeHtml(cta)}">
-              ${slides}
+              <img class="featured-img active" src="${escapeHtml(firstPhoto)}" alt="${escapeHtml(imageAlt)}" loading="eager" />
             </a>
             <div class="featured-body">
               <div class="featured-tags">
@@ -1653,13 +1653,32 @@
         wireNav();
         observeReveals();
         schedulePageScrollCueUpdate();
-        const slideEls = host.querySelectorAll('.featured-img');
-        if (slideEls.length > 1 && scope) {
+        const featuredMediaEl = host.querySelector('.featured-media');
+        if (featuredMediaEl && photos.length > 1 && scope) {
           let currentSlide = 0;
           scope.addInterval(() => {
-            slideEls[currentSlide].classList.remove('active');
-            currentSlide = (currentSlide + 1) % slideEls.length;
-            slideEls[currentSlide].classList.add('active');
+            currentSlide = (currentSlide + 1) % photos.length;
+            const nextSrc = photos[currentSlide];
+            const activeImage = featuredMediaEl.querySelector('.featured-img.active');
+            if (activeImage && activeImage.getAttribute('src') === nextSrc) return;
+
+            const nextImage = new Image();
+            nextImage.className = 'featured-img';
+            nextImage.alt = imageAlt;
+            nextImage.loading = 'eager';
+            nextImage.onload = () => {
+              if (!featuredMediaEl.isConnected) return;
+              featuredMediaEl.appendChild(nextImage);
+              window.requestAnimationFrame(() => {
+                const previousImage = featuredMediaEl.querySelector('.featured-img.active');
+                nextImage.classList.add('active');
+                if (previousImage) previousImage.classList.remove('active');
+                window.setTimeout(() => {
+                  [...featuredMediaEl.querySelectorAll('.featured-img:not(.active)')].forEach((img) => img.remove());
+                }, 900);
+              });
+            };
+            nextImage.src = nextSrc;
           }, 5000);
         }
       } catch (err) {
