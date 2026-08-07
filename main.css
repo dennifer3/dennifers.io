@@ -2784,6 +2784,41 @@ input:focus-visible {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
+.video-tile-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(5, 5, 10, 0.58);
+  color: #e9e6ff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  backdrop-filter: blur(12px);
+  opacity: 1;
+  transition: opacity 0.28s ease, visibility 0.28s ease;
+  pointer-events: none;
+}
+
+.video-tile-loading span {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: var(--primary-2);
+  box-shadow: 0 0 16px rgba(44, 182, 125, 0.34);
+  animation: spin 0.9s linear infinite;
+}
+
+.video-frame.video-preview-ready .video-tile-loading {
+  opacity: 0;
+  visibility: hidden;
+}
+
 .video-frame:hover .video-play-badge,
 .video-frame:focus-within .video-play-badge {
   opacity: 0;

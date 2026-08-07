@@ -1654,6 +1654,10 @@
                 <video muted preload="metadata" playsinline aria-hidden="true">
                   <source src="${escapeHtml(videoUrl)}">
                 </video>
+                <span class="video-tile-loading" aria-hidden="true">
+                  <span></span>
+                  Fetching clip
+                </span>
                 <span class="video-play-badge" aria-hidden="true">▶</span>
               </span>
             </button>
@@ -1683,6 +1687,19 @@
           const item = visibleItems[Number(button.dataset.index)];
           if (item) openVideoModal(item);
         });
+      });
+      gridEl.querySelectorAll('.video-frame video').forEach((previewVideo) => {
+        const frame = previewVideo.closest('.video-frame');
+        const markReady = () => {
+          if (frame) frame.classList.add('video-preview-ready');
+        };
+        if (previewVideo.readyState >= 1) {
+          markReady();
+        } else {
+          previewVideo.addEventListener('loadedmetadata', markReady, { once: true });
+          previewVideo.addEventListener('loadeddata', markReady, { once: true });
+          previewVideo.addEventListener('error', markReady, { once: true });
+        }
       });
       observeReveals();
       schedulePageScrollCueUpdate();
