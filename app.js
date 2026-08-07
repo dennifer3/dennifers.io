@@ -323,31 +323,51 @@
     });
   }
 
-  function attachGroupedMiniMediaLoaders(root = app) {
+  function waitForImageReady(img) {
+    if (!img) {
+      return Promise.resolve();
+    }
+    if (img.complete && img.naturalWidth > 0) {
+      return typeof img.decode === 'function'
+        ? img.decode().catch(() => {})
+        : Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const done = () => {
+        if (typeof img.decode === 'function') {
+          img.decode().catch(() => {}).then(resolve);
+          return;
+        }
+        resolve();
+      };
+      img.addEventListener('load', done, { once: true });
+      img.addEventListener('error', done, { once: true });
+    });
+  }
+
+  function attachGroupedMiniMediaLoaders(root = app, options = {}) {
     if (!root) return;
     const surfaces = [...root.querySelectorAll('.media-fetch-surface')];
     if (surfaces.length === 0) return;
+    const selector = options.selector || 'img.active, img';
+    const timeoutMs = Number(options.timeoutMs) || 6000;
 
     const waits = surfaces.map((surface) => {
       if (!surface.querySelector('.mini-media-loading')) {
         surface.insertAdjacentHTML('beforeend', miniMediaLoaderMarkup(surface.dataset.loadingLabel || 'Fetching media'));
       }
 
-      const media = surface.querySelector('img.active, img');
-      if (!media || (media.complete && media.naturalWidth > 0)) {
+      const mediaItems = [...surface.querySelectorAll(selector)];
+      if (mediaItems.length === 0) {
         return Promise.resolve();
       }
-
-      return new Promise((resolve) => {
-        const done = () => resolve();
-        media.addEventListener('load', done, { once: true });
-        media.addEventListener('error', done, { once: true });
-      });
+      return Promise.all(mediaItems.map(waitForImageReady));
     });
 
     Promise.race([
       Promise.all(waits),
-      delay(6000)
+      delay(timeoutMs)
     ]).then(() => {
       surfaces.forEach((surface) => surface.classList.add('media-fetch-ready'));
     });
@@ -725,7 +745,15 @@
       if (project.photos.length > 1) {
         const slidesList = card.querySelectorAll('.thumb-img');
         let currentSlide = 0;
+        let carouselReady = false;
+        Promise.race([
+          Promise.all([...slidesList].map(waitForImageReady)),
+          delay(12000)
+        ]).then(() => {
+          carouselReady = true;
+        });
         scope.addInterval(() => {
+          if (!carouselReady) return;
           let nextSlide = currentSlide;
           for (let step = 1; step <= slidesList.length; step += 1) {
             const candidate = (currentSlide + step) % slidesList.length;
@@ -812,7 +840,7 @@
       });
 
       observeReveals();
-      attachGroupedMiniMediaLoaders(gridEl);
+      attachGroupedMiniMediaLoaders(gridEl, { selector: 'img', timeoutMs: 12000 });
     }
 
     if (window.PROJECTS && Array.isArray(window.PROJECTS)) {
