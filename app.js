@@ -12,7 +12,6 @@
   window.__spaLive = true;
 
   const app = document.getElementById('app');
-  const siteBoot = document.getElementById('siteBoot');
   const mediaGate = document.getElementById('mediaGate');
   const mediaGateTitle = document.getElementById('mediaGateTitle');
   const mediaGateDetail = document.getElementById('mediaGateDetail');
@@ -52,7 +51,6 @@
   let revealObserver = null;
   let viewCleanup = null;
   let mediaLoading = false;
-  let siteBootDismissed = false;
   let backgroundMediaStarted = false;
   let backgroundMediaRunning = false;
   const backgroundMediaQueue = [];
@@ -294,54 +292,35 @@
     }
   }
 
-  function waitForImageElement(img) {
-    return new Promise((resolve) => {
-      if (!img) {
-        resolve(false);
-        return;
-      }
-      if (img.complete && img.naturalWidth > 0) {
-        resolve(true);
-        return;
-      }
-      const timeout = window.setTimeout(() => cleanup(false), 4200);
-      function cleanup(result) {
-        window.clearTimeout(timeout);
-        img.removeEventListener('load', onLoad);
-        img.removeEventListener('error', onError);
-        resolve(result);
-      }
-      function onLoad() {
-        cleanup(true);
-      }
-      function onError() {
-        cleanup(false);
-      }
-      img.addEventListener('load', onLoad, { once: true });
-      img.addEventListener('error', onError, { once: true });
-    });
+  function miniMediaLoaderMarkup(label = 'Fetching media') {
+    return `
+      <span class="mini-media-loading" aria-hidden="true">
+        <span></span>
+        ${escapeHtml(label)}
+      </span>
+    `;
   }
 
-  async function dismissSiteBootWhenReady(name) {
-    if (!siteBoot || siteBootDismissed) return;
-    const selector = name === 'welcome'
-      ? '.welcome-preview-slot img.active'
-      : name === 'home'
-        ? '.featured-img.active'
-        : '';
-    const images = selector ? [...app.querySelectorAll(selector)].slice(0, 3) : [];
-    const waitForImages = Promise.all(images.map(waitForImageElement));
-    const minimumDelay = delay(900);
-    const maximumDelay = delay(4800);
-    await Promise.race([
-      Promise.all([waitForImages, minimumDelay]),
-      maximumDelay
-    ]);
-    siteBootDismissed = true;
-    siteBoot.classList.add('hidden');
-    window.setTimeout(() => {
-      siteBoot.style.display = 'none';
-    }, 500);
+  function attachMiniMediaLoaders(root = app) {
+    if (!root) return;
+    root.querySelectorAll('.media-fetch-surface').forEach((surface) => {
+      if (!surface.querySelector('.mini-media-loading')) {
+        surface.insertAdjacentHTML('beforeend', miniMediaLoaderMarkup(surface.dataset.loadingLabel || 'Fetching media'));
+      }
+
+      const media = surface.querySelector('img.active, img');
+      const markReady = () => surface.classList.add('media-fetch-ready');
+      if (!media) {
+        markReady();
+        return;
+      }
+      if (media.complete && media.naturalWidth > 0) {
+        markReady();
+        return;
+      }
+      media.addEventListener('load', markReady, { once: true });
+      media.addEventListener('error', markReady, { once: true });
+    });
   }
 
   function delay(ms) {
@@ -688,8 +667,9 @@
       card.dataset.projectKey = targetKey(project.name);
 
       card.innerHTML = `
-        <div class="project-thumb" style="--tint:${tint}">
+        <div class="project-thumb media-fetch-surface" style="--tint:${tint}">
           ${slides}
+          ${miniMediaLoaderMarkup('Fetching photos')}
         </div>
         <div class="project-info">
           <div class="project-tags">
@@ -789,6 +769,7 @@
       });
 
       observeReveals();
+      attachMiniMediaLoaders(gridEl);
     }
 
     if (window.PROJECTS && Array.isArray(window.PROJECTS)) {
@@ -798,10 +779,6 @@
         schedulePageScrollCueUpdate();
         window.requestAnimationFrame(scrollToPortfolioTarget);
       });
-      preloadMediaGroups(window.PROJECTS.map((category) => ({
-        label: category.label,
-        urls: (category.projects || []).flatMap((project) => project.photos || [])
-      })), 'Portfolio', 'portfolio').catch((err) => console.warn('Portfolio media preload skipped:', err));
     } else {
       emptyEl.style.display = '';
       filtersEl.style.display = 'none';
@@ -903,8 +880,9 @@
       const card = document.createElement('article');
       card.className = 'vrchat-card reveal';
       card.innerHTML = `
-        <div class="vrchat-thumb">
+        <div class="vrchat-thumb media-fetch-surface">
           <img class="thumb-img active" src="${safeSrc}" alt="VRChat photo ${globalIndex + 1}" loading="eager" referrerpolicy="no-referrer" />
+          ${miniMediaLoaderMarkup('Fetching photo')}
           <div class="vrchat-overlay">
             <button type="button" class="vrchat-action" aria-label="Open VRChat photo ${globalIndex + 1}">View</button>
             <a class="vrchat-action" href="${safeSrc}" download target="_blank" rel="noopener noreferrer" aria-label="Download VRChat photo ${globalIndex + 1}">Download</a>
@@ -1053,6 +1031,7 @@
 
       renderJumpbar(selected);
       observeReveals();
+      attachMiniMediaLoaders(gridEl);
     }
 
     function showPhoto(index) {
@@ -1099,10 +1078,6 @@
     renderFilters();
     renderGrid();
     schedulePageScrollCueUpdate();
-    preloadMediaGroups(categories.map((category) => ({
-      label: category.label,
-      urls: category.photos
-    })), 'VRChat Photos', 'vrchat').catch((err) => console.warn('VRChat media preload skipped:', err));
   }
 
   function initCommissions(scope) {
@@ -1207,8 +1182,9 @@
 
         return `
           <article class="finished-commission-card reveal">
-            <div class="finished-commission-media">
+            <div class="finished-commission-media media-fetch-surface">
               ${imageMarkup}
+              ${miniMediaLoaderMarkup('Fetching media')}
             </div>
             <div class="finished-commission-body">
               <div class="finished-commission-built-for">
@@ -1234,6 +1210,7 @@
           images[currentIndex].classList.add('active');
         }, 5000);
       });
+      attachMiniMediaLoaders(finishedGridEl);
 
       return uniqueUrls(finishedMedia.flat());
     }
@@ -1241,7 +1218,7 @@
     async function render() {
       try {
         const globalConfig = await loadGlobalConfig();
-        const finishedImages = renderFinishedCommissions(globalConfig.commissions && globalConfig.commissions.finished);
+        renderFinishedCommissions(globalConfig.commissions && globalConfig.commissions.finished);
         const res = await fetch('commissions.json', { cache: 'no-store' });
         if (!res.ok) throw new Error('Unable to load commissions data');
         const items = await res.json();
@@ -1266,8 +1243,9 @@
             : '<div class="commission-image-placeholder">✦</div>';
 
           card.innerHTML = `
-            <div class="commission-thumb">
+            <div class="commission-thumb media-fetch-surface">
               ${imagesMarkup}
+              ${miniMediaLoaderMarkup('Fetching media')}
             </div>
             <div class="commission-body">
               <h3>${escapeHtml(category)}</h3>
@@ -1289,15 +1267,8 @@
       });
 
         observeReveals();
+        attachMiniMediaLoaders(gridEl);
         schedulePageScrollCueUpdate();
-        const serviceGroups = items.map((item) => ({
-          label: normalizeText(item.category, 'Commission'),
-          urls: item.images || []
-        }));
-        if (finishedImages.length > 0) {
-          serviceGroups.push({ label: 'Finished Work', urls: finishedImages });
-        }
-        preloadMediaGroups(serviceGroups, 'Commissions', 'commissions').catch((err) => console.warn('Commission media preload skipped:', err));
       } catch (err) {
         console.error(err);
         emptyEl.style.display = '';
@@ -1352,8 +1323,9 @@
         : `<div class="download-thumb-art">⬇</div>`;
 
       return `
-        <div class="download-thumb">
+        <div class="download-thumb media-fetch-surface">
           ${thumbMarkup}
+          ${miniMediaLoaderMarkup('Fetching file')}
         </div>
         <div class="download-card-body">
           ${featured ? '<span class="download-featured-kicker">Featured Download</span>' : ''}
@@ -1385,6 +1357,7 @@
         gridEl.appendChild(card);
       });
       observeReveals();
+      attachMiniMediaLoaders(gridEl);
     }
 
     function applyDownloadFilters(items) {
@@ -1434,6 +1407,7 @@
           if (items.length > 1) {
             featuredEl.style.display = '';
             featuredEl.innerHTML = `<article class="download-card download-featured-card reveal">${downloadCardMarkup(items[0], true)}</article>`;
+            attachMiniMediaLoaders(featuredEl);
           } else {
             featuredEl.style.display = 'none';
             featuredEl.innerHTML = '';
@@ -1891,8 +1865,9 @@
             ? `
               <div class="welcome-preview-stack">
                 ${previewImages.map((src, index) => `
-                  <div class="welcome-preview-slot">
+                  <div class="welcome-preview-slot media-fetch-surface">
                     <img class="active" src="${escapeHtml(src)}" alt="Welcome preview ${index + 1}" loading="eager" />
+                    ${miniMediaLoaderMarkup('Fetching preview')}
                   </div>
                 `).join('')}
               </div>
@@ -1900,6 +1875,7 @@
             : '';
 
           const previewSlots = [...previewEl.querySelectorAll('.welcome-preview-slot')];
+          attachMiniMediaLoaders(previewEl);
           if (previewSlots.length > 0 && availableImages.length > previewSlots.length) {
             const intervalOwner = scope || { addInterval: window.setInterval.bind(window) };
             intervalOwner.addInterval(() => {
@@ -2051,8 +2027,9 @@
             <p>${escapeHtml(heading)}</p>
           </div>
           <article class="featured-card">
-            <a href="${escapeHtml(href)}" data-page="${escapeHtml(page)}" class="featured-media" aria-label="${escapeHtml(cta)}">
+            <a href="${escapeHtml(href)}" data-page="${escapeHtml(page)}" class="featured-media media-fetch-surface" aria-label="${escapeHtml(cta)}">
               <img class="featured-img active" src="${escapeHtml(firstPhoto)}" alt="${escapeHtml(imageAlt)}" loading="eager" />
+              ${miniMediaLoaderMarkup('Fetching feature')}
             </a>
             <div class="featured-body">
               <div class="featured-tags">
@@ -2071,6 +2048,7 @@
         host.style.display = '';
         wireNav();
         observeReveals();
+        attachMiniMediaLoaders(host);
         schedulePageScrollCueUpdate();
         const featuredMediaEl = host.querySelector('.featured-media');
         if (featuredMediaEl && photos.length > 1 && scope) {
@@ -2136,7 +2114,6 @@ async function loadView(name) {
       initFeatured(scope);
       observeReveals();
       schedulePageScrollCueUpdate();
-      dismissSiteBootWhenReady('home');
       return;
     }
 
@@ -2159,7 +2136,6 @@ setActive(name);
       if (name === 'support') initSupport(scope);
       observeReveals();
       schedulePageScrollCueUpdate();
-      dismissSiteBootWhenReady(name);
       // No subsection auto-scroll needed for standalone pages.
     } catch (e) {
       app.innerHTML = '<p style="text-align:center;padding:60px">Could not load page.</p>';
