@@ -323,6 +323,40 @@
     });
   }
 
+  function attachGroupedMiniMediaLoaders(root = app) {
+    if (!root) return;
+    const surfaces = [...root.querySelectorAll('.media-fetch-surface')];
+    if (surfaces.length === 0) return;
+
+    const waits = surfaces.map((surface) => {
+      if (!surface.querySelector('.mini-media-loading')) {
+        surface.insertAdjacentHTML('beforeend', miniMediaLoaderMarkup(surface.dataset.loadingLabel || 'Fetching media'));
+      }
+
+      const media = surface.querySelector('img.active, img');
+      if (!media || (media.complete && media.naturalWidth > 0)) {
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        media.addEventListener('load', done, { once: true });
+        media.addEventListener('error', done, { once: true });
+      });
+    });
+
+    Promise.race([
+      Promise.all(waits),
+      delay(6000)
+    ]).then(() => {
+      surfaces.forEach((surface) => surface.classList.add('media-fetch-ready'));
+    });
+  }
+
+  function isRenderableImage(img) {
+    return Boolean(img && img.complete && img.naturalWidth > 0);
+  }
+
   function delay(ms) {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
@@ -656,7 +690,7 @@
         slides = `<div class="thumb-art">🌌</div>`;
       } else {
         slides = project.photos.map((src, i) => `
-          <img class="thumb-img${i === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(coverAlt)}" loading="eager" referrerpolicy="no-referrer" />
+          <img class="thumb-img${i === 0 ? ' active' : ''}" src="${escapeHtml(src)}" alt="${escapeHtml(coverAlt)}" loading="eager" decoding="async" referrerpolicy="no-referrer" />
         `).join('');
       }
 
@@ -692,8 +726,17 @@
         const slidesList = card.querySelectorAll('.thumb-img');
         let currentSlide = 0;
         scope.addInterval(() => {
+          let nextSlide = currentSlide;
+          for (let step = 1; step <= slidesList.length; step += 1) {
+            const candidate = (currentSlide + step) % slidesList.length;
+            if (isRenderableImage(slidesList[candidate])) {
+              nextSlide = candidate;
+              break;
+            }
+          }
+          if (nextSlide === currentSlide) return;
           slidesList[currentSlide].classList.remove('active');
-          currentSlide = (currentSlide + 1) % slidesList.length;
+          currentSlide = nextSlide;
           slidesList[currentSlide].classList.add('active');
         }, 5000);
       }
@@ -769,7 +812,7 @@
       });
 
       observeReveals();
-      attachMiniMediaLoaders(gridEl);
+      attachGroupedMiniMediaLoaders(gridEl);
     }
 
     if (window.PROJECTS && Array.isArray(window.PROJECTS)) {
@@ -1210,7 +1253,7 @@
           images[currentIndex].classList.add('active');
         }, 5000);
       });
-      attachMiniMediaLoaders(finishedGridEl);
+      attachGroupedMiniMediaLoaders(finishedGridEl);
 
       return uniqueUrls(finishedMedia.flat());
     }
@@ -1267,7 +1310,7 @@
       });
 
         observeReveals();
-        attachMiniMediaLoaders(gridEl);
+        attachGroupedMiniMediaLoaders(gridEl);
         schedulePageScrollCueUpdate();
       } catch (err) {
         console.error(err);
@@ -1875,7 +1918,7 @@
             : '';
 
           const previewSlots = [...previewEl.querySelectorAll('.welcome-preview-slot')];
-          attachMiniMediaLoaders(previewEl);
+          attachGroupedMiniMediaLoaders(previewEl);
           if (previewSlots.length > 0 && availableImages.length > previewSlots.length) {
             const intervalOwner = scope || { addInterval: window.setInterval.bind(window) };
             intervalOwner.addInterval(() => {
